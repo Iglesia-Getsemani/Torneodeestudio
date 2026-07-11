@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jornada</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg-deep: #13201A;
+  --bg-panel: #1D2D24;
+  --bg-panel-hover: #23362A;
+  --accent-gold: #D8A84E;
+  --accent-gold-dim: rgba(216,168,78,0.22);
+  --accent-red: #C75450;
+  --accent-green: #4EA87A;
+  --text-cream: #F1ECE0;
+  --text-muted: #8FA293;
+  --radius: 10px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg-deep); color: var(--text-cream);
+  font-family: 'Inter', sans-serif; min-height: 100vh;
+  padding: 32px 18px 80px;
+}
+#app { max-width: 640px; margin: 0 auto; }
+.page { display: flex; flex-direction: column; gap: 22px; }
+
+.eyebrow { display: block; font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-gold); margin-bottom: 6px; }
+.page-header h1 { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 2rem; margin: 0; }
+.section-title { font-family: 'Oswald', sans-serif; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 12px; }
+
+.back-link { align-self: flex-start; background: none; border: none; color: var(--text-muted); font-family: 'Inter', sans-serif; font-size: .88rem; cursor: pointer; padding: 4px 0; text-decoration: none; display: inline-block; }
+.back-link:hover { color: var(--accent-gold); }
+
+/* round nav */
+.round-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.round-nav-btn {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  color: var(--accent-gold); border-radius: 8px; padding: 8px 16px;
+  font-family: 'Oswald', sans-serif; font-size: .82rem; letter-spacing: .04em;
+  text-transform: uppercase; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.round-nav-btn:hover:not(:disabled) { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+.round-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+.round-counter { font-family: 'Oswald', sans-serif; font-size: .85rem; letter-spacing: .04em; color: var(--text-muted); text-transform: uppercase; }
+
+/* match cards */
+.match-list { display: flex; flex-direction: column; gap: 12px; }
+.match-card {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); overflow: hidden;
+  transition: border-color .15s;
+}
+.match-card.done { border-color: rgba(78,168,122,.4); }
+.match-card.in-progress { border-color: rgba(216,168,78,.55); border-style: dashed; }
+.match-card-top {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; padding: 16px 18px;
+  cursor: pointer;
+}
+.match-card-top:hover .match-name { color: var(--accent-gold); }
+.match-name { font-size: .95rem; font-weight: 500; }
+.match-card-top .match-name:first-child { text-align: right; padding-right: 14px; }
+.match-card-top .match-name:last-child { text-align: left; padding-left: 14px; }
+.vs-badge {
+  font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--accent-red);
+  padding: 3px 10px; border: 1px solid rgba(199,84,80,.4); border-radius: 999px;
+}
+.match-result-row {
+  display: flex; align-items: center; justify-content: center; gap: 16px;
+  padding: 10px 18px 14px; font-family: 'Oswald', sans-serif; font-size: 1.5rem; font-weight: 700;
+}
+.score-home { color: var(--text-cream); }
+.score-sep { color: var(--text-muted); font-size: 1rem; }
+.score-away { color: var(--text-cream); }
+.winner-tag { font-family: 'Oswald', sans-serif; font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-green); padding: 2px 8px; border-radius: 999px; background: rgba(78,168,122,.15); }
+.draw-tag { font-family: 'Oswald', sans-serif; font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-gold); padding: 2px 8px; border-radius: 999px; background: rgba(216,168,78,.12); }
+.live-tag { font-family: 'Oswald', sans-serif; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-gold); padding: 2px 8px; border-radius: 999px; background: rgba(216,168,78,.14); border: 1px solid rgba(216,168,78,.4); }
+.match-result-row.partial { opacity: .85; }
+.match-result-row.partial .score-home,
+.match-result-row.partial .score-away { font-size: 1.25rem; color: var(--text-muted); }
+
+.start-eval-btn {
+  display: block; width: calc(100% - 36px); margin: 0 18px 14px;
+  padding: 10px; border: none; border-radius: 8px;
+  background: var(--accent-gold); color: #1A1409;
+  font-family: 'Oswald', sans-serif; font-size: .88rem;
+  letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+  transition: filter .15s;
+}
+.start-eval-btn:hover { filter: brightness(1.08); }
+
+.resting-note { font-size: .85rem; color: var(--text-muted); text-align: center; }
+.divider { border: none; border-top: 1px solid var(--accent-gold-dim); margin: 0; }
+
+/* all rounds sidebar list */
+.all-rounds-list { display: flex; flex-direction: column; gap: 8px; }
+.round-item {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: 8px; padding: 12px 18px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.round-item:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+.round-item.active { border-color: var(--accent-gold); background: var(--accent-gold-dim); }
+.round-item-num { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 1.4rem; color: var(--accent-gold); min-width: 32px; text-align: center; }
+.round-item-info { flex: 1; font-size: .88rem; }
+.round-item-arrow { color: var(--accent-gold); }
+
+.error-state { text-align: center; color: var(--accent-red); padding: 60px 0; font-family: 'Oswald', sans-serif; text-transform: uppercase; }
+
+/* generate image button */
+.gen-image-btn {
+  align-self: center; display: flex; align-items: center; gap: 8px; justify-content: center;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  color: var(--accent-gold); border-radius: 8px; padding: 10px 20px;
+  font-family: 'Oswald', sans-serif; font-size: .82rem; letter-spacing: .04em;
+  text-transform: uppercase; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.gen-image-btn:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+
+/* promo image modal */
+.image-modal-overlay {
+  position: fixed; inset: 0; background: rgba(8,13,10,.88);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; z-index: 999;
+}
+.image-modal {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 18px; max-width: 92vw; max-height: 92vh;
+  display: flex; flex-direction: column; gap: 14px; align-items: center;
+  overflow: auto;
+}
+.image-modal canvas {
+  max-width: 100%; max-height: 70vh; width: auto; height: auto;
+  border-radius: 8px; display: block; background: #0C1410;
+}
+.image-modal-hint { font-size: .8rem; color: var(--text-muted); text-align: center; margin: 0; }
+.image-modal-actions { display: flex; gap: 10px; }
+.image-modal-actions button {
+  border: none; border-radius: 8px; padding: 10px 18px;
+  font-family: 'Oswald', sans-serif; font-size: .82rem; letter-spacing: .04em;
+  text-transform: uppercase; cursor: pointer; transition: filter .15s, border-color .15s;
+}
+.btn-download { background: var(--accent-gold); color: #1A1409; }
+.btn-download:hover { filter: brightness(1.08); }
+.btn-close-modal { background: var(--bg-panel-hover); color: var(--text-cream); border: 1px solid var(--accent-gold-dim); }
+.btn-close-modal:hover { border-color: var(--accent-gold); }
+</style>
+</head>
+<body>
+<div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.04em">Cargando…</p></div>
+<script src="storage.js"></script>
+<script>
+
+const params = new URLSearchParams(location.search);
+const tid = params.get('tid');
+let roundIndex = parseInt(params.get('round') ?? '0', 10);
+let resultsRevealed = false; // revelado temporal (por sesión) cuando el torneo oculta resultados
+
+function pushRound(idx) {
+  const url = new URL(location.href);
+  url.searchParams.set('round', idx);
+  history.replaceState(null, '', url.toString());
+}
+
+// Marcador parcial de un enfrentamiento que quedó a medias (progreso
+// autoguardado, sin terminar ni guardar como resultado final). Suma las
+// preguntas ya evaluadas correctas + los puntos de ronda extra ya asignados,
+// igual que Enfrentamiento.html, para poder mostrar "cómo va" en vivo.
+function partialScore(m) {
+  const p = m.progress;
+  if (!p) return null;
+  let home = 0, away = 0, answered = 0;
+  (p.turnData || []).forEach(td => {
+    if (td.home?.correct === true) { home++; answered++; }
+    else if (td.home?.correct === false) answered++;
+    if (td.away?.correct === true) { away++; answered++; }
+    else if (td.away?.correct === false) answered++;
+  });
+  if (p.extraScores) {
+    home += p.extraScores.home || 0;
+    away += p.extraScores.away || 0;
+  }
+  if (answered === 0 && !(p.extraScores && ((p.extraScores.home||0) + (p.extraScores.away||0) > 0))) return null;
+  return { home, away };
+}
+
+function render() {
+  const t = getTournament(tid);
+  if (!t) {
+    document.getElementById('app').innerHTML = `
+      <div class="page">
+        <p class="error-state">No se encontró el torneo.</p>
+        <a class="back-link" href="OrganizadorTorneos.html">← Volver al organizador</a>
+      </div>`;
+    return;
+  }
+
+  if (roundIndex < 0) roundIndex = 0;
+  if (roundIndex >= t.rounds.length) roundIndex = t.rounds.length - 1;
+
+  const round = t.rounds[roundIndex];
+  const playing = new Set();
+  round.forEach(m => { playing.add(m.home); playing.add(m.away); });
+  const resting = t.participants.filter(p => !playing.has(p));
+
+  const hideRes = t.hideResults && !resultsRevealed;
+
+  const matchesHtml = round.map((m, mi) => {
+    const done = !!m.result;
+    const partial = !done ? partialScore(m) : null;
+    const inProgress = !done && !!partial;
+    let resultHtml = '';
+    if (done) {
+      if (hideRes) {
+        resultHtml = `<div class="match-result-row"><span class="draw-tag">🔒 Jugado</span></div>`;
+      } else {
+        const { homeScore, awayScore } = m.result;
+        let winnerHtml = '';
+        if (homeScore > awayScore) winnerHtml = `<span class="winner-tag">🏆 ${esc(m.home)}</span>`;
+        else if (awayScore > homeScore) winnerHtml = `<span class="winner-tag">🏆 ${esc(m.away)}</span>`;
+        else winnerHtml = `<span class="draw-tag">Empate</span>`;
+        resultHtml = `
+          <div class="match-result-row">
+            <span class="score-home">${homeScore}</span>
+            <span class="score-sep">—</span>
+            <span class="score-away">${awayScore}</span>
+            ${winnerHtml}
+          </div>`;
+      }
+    } else if (inProgress) {
+      // Enfrentamiento a medias: se ve "cómo va" sin esperar a que termine.
+      if (hideRes) {
+        resultHtml = `<div class="match-result-row"><span class="live-tag">🔒 En curso</span></div>`;
+      } else {
+        resultHtml = `
+          <div class="match-result-row partial">
+            <span class="score-home">${partial.home}</span>
+            <span class="score-sep">—</span>
+            <span class="score-away">${partial.away}</span>
+            <span class="live-tag">🔴 En curso</span>
+          </div>`;
+      }
+    }
+
+    const btnLabel = done ? '✎ Revisar / Editar' : (inProgress ? '▶ Continuar evaluación' : '▶ Evaluar enfrentamiento');
+
+    return `
+      <div class="match-card ${done ? 'done' : (inProgress ? 'in-progress' : '')}">
+        <div class="match-card-top">
+          <span class="match-name">${esc(m.home)}</span>
+          <span class="vs-badge">vs</span>
+          <span class="match-name">${esc(m.away)}</span>
+        </div>
+        ${resultHtml}
+        <button class="start-eval-btn" data-action="eval" data-match="${mi}">${btnLabel}</button>
+      </div>`;
+  }).join('');
+
+  const restingHtml = resting.length
+    ? `<p class="resting-note">${resting.map(esc).join(', ')} descansa${resting.length>1?'n':''} esta jornada.</p>`
+    : '';
+
+  const allRoundsHtml = t.rounds.map((r, i) => {
+    const done = r.filter(m => m.result).length;
+    const inProg = r.filter(m => !m.result && m.progress).length;
+    const info = inProg > 0
+      ? `${done}/${r.length} evaluados · ${inProg} en curso`
+      : `${done}/${r.length} evaluados`;
+    return `
+      <div class="round-item ${i===roundIndex?'active':''}" data-action="go-round" data-idx="${i}">
+        <span class="round-item-num">${i+1}</span>
+        <span class="round-item-info">${info}</span>
+        <span class="round-item-arrow">${i===roundIndex?'●':'→'}</span>
+      </div>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <a class="back-link" href="OrganizadorTorneos.html?open=${encodeURIComponent(tid)}">← ${esc(t.name)}</a>
+
+      <header class="page-header">
+        <span class="eyebrow">${esc(t.name)}</span>
+        <h1>Jornada ${roundIndex + 1}</h1>
+      </header>
+
+      <div class="round-nav">
+        <button class="round-nav-btn" data-action="prev" ${roundIndex===0?'disabled':''}>← Anterior</button>
+        <span class="round-counter">${roundIndex+1} / ${t.rounds.length}</span>
+        <button class="round-nav-btn" data-action="next" ${roundIndex===t.rounds.length-1?'disabled':''}>Siguiente →</button>
+      </div>
+
+      <button class="gen-image-btn" data-action="gen-image">🖼 Generar imagen para promocionar</button>
+      ${t.hideResults ? `<button class="gen-image-btn" data-action="toggle-reveal">${resultsRevealed ? '🙈 Ocultar resultados de nuevo' : '👁 Revelar resultados de esta jornada'}</button>` : ''}
+
+      <section>
+        <div class="match-list">${matchesHtml}</div>
+        ${restingHtml}
+      </section>
+
+      <hr class="divider">
+
+      <section>
+        <h2 class="section-title">Todas las jornadas</h2>
+        <div class="all-rounds-list">${allRoundsHtml}</div>
+      </section>
+    </div>`;
+
+  document.title = `Jornada ${roundIndex+1} · ${t.name}`;
+}
+
+document.getElementById('app').addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  const t = getTournament(tid);
+
+  if (action === 'prev' && roundIndex > 0) {
+    roundIndex--; pushRound(roundIndex); render();
+  } else if (action === 'next' && t && roundIndex < t.rounds.length - 1) {
+    roundIndex++; pushRound(roundIndex); render();
+  } else if (action === 'go-round') {
+    roundIndex = +el.dataset.idx; pushRound(roundIndex); render();
+  } else if (action === 'eval') {
+    const mi = el.dataset.match;
+    window.location.href = `Enfrentamiento.html?tid=${encodeURIComponent(tid)}&round=${roundIndex}&match=${mi}`;
+  } else if (action === 'gen-image') {
+    if (t) openImageModal(t, roundIndex);
+  } else if (action === 'toggle-reveal') {
+    resultsRevealed = !resultsRevealed;
+    render();
+  }
+});
+
+// ---------- Imagen promocional ----------
+
+async function openImageModal(t, roundIndex) {
+  const round = t.rounds[roundIndex];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'image-modal-overlay';
+  overlay.innerHTML = `
+    <div class="image-modal">
+      <canvas id="promo-canvas" width="1080" height="1350"></canvas>
+      <p class="image-modal-hint">Mantén presionada la imagen o usa "Guardar" para descargarla.</p>
+      <div class="image-modal-actions">
+        <button class="btn-download" data-action="download-image">⬇ Guardar imagen</button>
+        <button class="btn-close-modal" data-action="close-modal">Cerrar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay || e.target.dataset.action === 'close-modal') {
+      overlay.remove();
+    } else if (e.target.dataset.action === 'download-image') {
+      const canvas = document.getElementById('promo-canvas');
+      const safeName = t.name.replace(/[^\w\-]+/g, '_');
+      const link = document.createElement('a');
+      link.download = `${safeName}_jornada_${roundIndex + 1}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+  });
+
+  await drawPromoImage(t, roundIndex, round);
+}
+
+async function drawPromoImage(t, roundIndex, round) {
+  const canvas = document.getElementById('promo-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  try {
+    await Promise.all([
+      document.fonts.load('700 84px Oswald'),
+      document.fonts.load('600 30px Oswald'),
+      document.fonts.load('600 34px Inter'),
+      document.fonts.load('500 26px Inter')
+    ]);
+    await document.fonts.ready;
+  } catch { /* si fallan las fuentes, se usa el fallback del sistema */ }
+
+  // fondo
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#182719');
+  bg.addColorStop(1, '#0C1410');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // borde decorativo
+  ctx.strokeStyle = 'rgba(216,168,78,0.5)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(24, 24, W - 48, H - 48);
+
+  ctx.textBaseline = 'alphabetic';
+
+  // nombre del torneo
+  ctx.fillStyle = '#D8A84E';
+  ctx.font = '600 30px Oswald, sans-serif';
+  drawTrackedText(ctx, t.name.toUpperCase(), W / 2, 130, 2);
+
+  // título "JORNADA N"
+  ctx.fillStyle = '#F1ECE0';
+  ctx.font = '700 84px Oswald, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`JORNADA ${roundIndex + 1}`, W / 2, 230);
+
+  // línea divisoria
+  ctx.strokeStyle = 'rgba(216,168,78,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - 140, 265);
+  ctx.lineTo(W / 2 + 140, 265);
+  ctx.stroke();
+
+  // enfrentamientos
+  const startY = 340;
+  const bottomMargin = 190;
+  const rowH = Math.max(90, Math.min(150, (H - startY - bottomMargin) / Math.max(round.length, 1)));
+
+  round.forEach((m, i) => {
+    const y = startY + i * rowH + rowH / 2;
+
+    ctx.fillStyle = 'rgba(29,45,36,0.85)';
+    roundRect(ctx, 90, y - rowH / 2 + 10, W - 180, rowH - 20, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(216,168,78,0.25)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, 90, y - rowH / 2 + 10, W - 180, rowH - 20, 14);
+    ctx.stroke();
+
+    ctx.font = '600 34px Inter, sans-serif';
+    ctx.fillStyle = '#F1ECE0';
+    ctx.textAlign = 'right';
+    ctx.fillText(truncate(ctx, m.home, 320), W / 2 - 60, y + 12);
+
+    ctx.textAlign = 'left';
+    ctx.fillText(truncate(ctx, m.away, 320), W / 2 + 60, y + 12);
+
+    ctx.textAlign = 'center';
+    ctx.font = '600 24px Oswald, sans-serif';
+    ctx.fillStyle = '#C75450';
+    ctx.fillText('VS', W / 2, y + 9);
+  });
+
+  // participantes que descansan
+  const playing = new Set();
+  round.forEach(m => { playing.add(m.home); playing.add(m.away); });
+  const resting = t.participants.filter(p => !playing.has(p));
+  if (resting.length) {
+    ctx.fillStyle = '#8FA293';
+    ctx.font = '500 26px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      `Descansa${resting.length > 1 ? 'n' : ''}: ${truncate(ctx, resting.join(', '), W - 200)}`,
+      W / 2, H - 100
+    );
+  }
+
+  // pie
+  ctx.fillStyle = 'rgba(216,168,78,0.6)';
+  ctx.font = '600 22px Oswald, sans-serif';
+  drawTrackedText(ctx, '¡NO TE LO PIERDAS!', W / 2, H - 55, 3);
+}
+
+function truncate(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
+  return t + '…';
+}
+
+function drawTrackedText(ctx, text, cx, y, spacing) {
+  ctx.save();
+  ctx.textAlign = 'left';
+  const chars = [...text];
+  let total = 0;
+  const widths = chars.map(ch => {
+    const w = ctx.measureText(ch).width;
+    total += w + spacing;
+    return w;
+  });
+  total -= spacing;
+  let x = cx - total / 2;
+  chars.forEach((ch, i) => {
+    ctx.fillText(ch, x, y);
+    x += widths[i] + spacing;
+  });
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+render();
+</script>
+</body>
+</html>

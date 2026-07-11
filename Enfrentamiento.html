@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enfrentamiento</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg-deep: #13201A;
+  --bg-panel: #1D2D24;
+  --bg-panel-hover: #23362A;
+  --accent-gold: #D8A84E;
+  --accent-gold-dim: rgba(216,168,78,0.22);
+  --accent-red: #C75450;
+  --accent-green: #4EA87A;
+  --accent-blue: #4E8EA8;
+  --text-cream: #F1ECE0;
+  --text-muted: #8FA293;
+  --radius: 10px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg-deep); color: var(--text-cream);
+  font-family: 'Inter', sans-serif; min-height: 100vh;
+  padding: 28px 18px 80px;
+}
+#app { max-width: 640px; margin: 0 auto; }
+.page { display: flex; flex-direction: column; gap: 22px; }
+
+.eyebrow { display: block; font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-gold); margin-bottom: 6px; }
+.page-header h1 { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 1.7rem; margin: 0; line-height: 1.2; }
+
+.back-link { align-self: flex-start; background: none; border: none; color: var(--text-muted); font-family: 'Inter', sans-serif; font-size: .88rem; cursor: pointer; padding: 4px 0; text-decoration: none; display: inline-block; }
+.back-link:hover { color: var(--accent-gold); }
+
+/* ── progress bar ── */
+.progress-wrap { display: flex; flex-direction: column; gap: 8px; }
+.progress-label { font-family: 'Oswald', sans-serif; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); display: flex; justify-content: space-between; }
+.progress-bar { height: 6px; background: var(--bg-panel); border-radius: 999px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent-gold); border-radius: 999px; transition: width .3s ease; }
+
+/* ── scoreboard ── */
+.scoreboard {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 12px;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 20px 18px;
+}
+.player-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.player-name { font-family: 'Oswald', sans-serif; font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); text-align: center; }
+.player-score {
+  font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 3rem; line-height: 1;
+  color: var(--text-cream); transition: transform .15s;
+}
+.player-score.bump { transform: scale(1.18); color: var(--accent-gold); }
+.score-divider { font-family: 'Oswald', sans-serif; font-size: 1.4rem; color: var(--text-muted); }
+
+/* ── question card ── */
+.question-card {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 22px 20px 18px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.question-number { font-family: 'Oswald', sans-serif; font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.question-text { font-size: 1.1rem; line-height: 1.5; font-weight: 500; }
+
+/* ── show answer button ── */
+.btn-show-answer {
+  width: 100%; padding: 18px; border: 2px solid var(--accent-gold-dim);
+  border-radius: var(--radius); background: var(--bg-panel);
+  color: var(--accent-gold); font-family: 'Oswald', sans-serif; font-size: 1.05rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.btn-show-answer:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+
+/* ── cuenta regresiva ── */
+.countdown-controls { display: flex; flex-direction: column; gap: 10px; }
+.btn-countdown-start {
+  width: 100%; padding: 18px; border: none;
+  border-radius: var(--radius); background: var(--accent-gold);
+  color: #1A1409; font-family: 'Oswald', sans-serif; font-size: 1.05rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer;
+  transition: filter .15s;
+}
+.btn-countdown-start:hover { filter: brightness(1.08); }
+.countdown-display {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: var(--bg-panel); border: 2px solid var(--accent-gold);
+  border-radius: var(--radius); padding: 24px 18px;
+}
+.countdown-number {
+  font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 3.6rem;
+  line-height: 1; color: var(--accent-gold);
+}
+.countdown-caption { font-size: .85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+
+/* ── answer reveal card ── */
+.answer-reveal {
+  background: var(--bg-panel); border: 2px solid var(--accent-gold);
+  border-radius: var(--radius); padding: 22px 20px;
+  display: flex; flex-direction: column; gap: 10px;
+  animation: fadeIn .25s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.answer-reveal .reveal-label {
+  font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--accent-gold);
+}
+.answer-reveal .reveal-value {
+  font-size: 1.15rem; line-height: 1.5; font-weight: 600;
+}
+
+/* ── judge buttons ── */
+.judge-row { display: flex; gap: 16px; }
+.judge-btn {
+  flex: 1; padding: 24px 16px; border: none; border-radius: var(--radius);
+  font-family: 'Oswald', sans-serif; font-size: 1.15rem;
+  letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+  transition: filter .15s, transform .1s;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.judge-btn:active { transform: scale(.95); }
+.judge-btn.correct {
+  background: rgba(78,168,122,.2); border: 2px solid var(--accent-green);
+  color: var(--accent-green);
+}
+.judge-btn.correct:hover { background: rgba(78,168,122,.35); }
+.judge-btn.wrong {
+  background: rgba(199,84,80,.2); border: 2px solid var(--accent-red);
+  color: var(--accent-red);
+}
+.judge-btn.wrong:hover { background: rgba(199,84,80,.35); }
+
+/* ── result card ── */
+.result-card {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 22px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+  animation: fadeIn .25s ease;
+}
+.result-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'Oswald', sans-serif; font-size: .85rem;
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: 6px 14px; border-radius: 999px; width: fit-content;
+}
+.result-badge.correct { background: rgba(78,168,122,.2); color: var(--accent-green); }
+.result-badge.wrong { background: rgba(199,84,80,.2); color: var(--accent-red); }
+.result-label { font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px; }
+.result-value { font-size: 1rem; line-height: 1.5; }
+.justification-box {
+  background: rgba(199,84,80,.08); border-left: 3px solid var(--accent-red);
+  border-radius: 0 8px 8px 0; padding: 14px 16px;
+  font-size: .92rem; line-height: 1.5; color: var(--text-cream);
+}
+.justification-label { font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-red); margin-bottom: 6px; }
+
+/* ── dots ── */
+.q-dots { display: flex; flex-wrap: wrap; gap: 6px; }
+.q-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  cursor: pointer; transition: background .15s;
+}
+.q-dot.scored { background: var(--accent-green); border-color: var(--accent-green); }
+.q-dot.current { border-color: var(--accent-gold); background: var(--accent-gold-dim); }
+
+/* ── turn indicator ── */
+.turn-indicator {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: 8px; padding: 12px 16px;
+}
+.turn-dot { width: 12px; height: 12px; border-radius: 50%; }
+.turn-dot.home { background: var(--accent-green); }
+.turn-dot.away { background: var(--accent-blue); }
+.turn-text { font-family: 'Oswald', sans-serif; font-size: .85rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-cream); }
+.turn-sub { font-size: .78rem; color: var(--text-muted); }
+
+/* ── ronda extra: puntos que pueden definir el enfrentamiento ── */
+.extra-intro {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 18px 18px;
+  display: flex; flex-direction: column; gap: 6px; text-align: center;
+}
+.extra-intro-title { font-family: 'Oswald', sans-serif; font-size: 1rem; letter-spacing: .03em; text-transform: uppercase; color: var(--accent-gold); }
+.extra-intro-sub { font-size: .85rem; color: var(--text-muted); }
+.extra-progress { font-family: 'Oswald', sans-serif; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); text-align: center; }
+.extra-card {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 28px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center;
+}
+.extra-player-name { font-family: 'Oswald', sans-serif; font-size: 1.3rem; font-weight: 700; }
+.extra-score-display {
+  font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 3.4rem; line-height: 1;
+  color: var(--accent-gold); transition: transform .15s;
+}
+.extra-score-display.bump { transform: scale(1.18); }
+.extra-score-btns { display: flex; gap: 12px; }
+.extra-btn {
+  width: 52px; height: 52px; border-radius: 10px; border: none;
+  font-family: 'Oswald', sans-serif; font-size: 1.6rem; font-weight: 700;
+  cursor: pointer; transition: filter .12s, transform .1s;
+  display: flex; align-items: center; justify-content: center;
+}
+.extra-btn:active { transform: scale(.92); }
+.extra-btn.minus { background: rgba(199,84,80,.18); color: var(--accent-red); }
+.extra-btn.minus:hover { filter: brightness(1.3); }
+.extra-btn.plus  { background: rgba(78,168,122,.18); color: var(--accent-green); }
+.extra-btn.plus:hover  { filter: brightness(1.3); }
+.extra-custom-row { display: flex; gap: 8px; width: 100%; max-width: 220px; }
+.extra-custom-row input {
+  flex: 1; background: var(--bg-deep); border: 1px solid var(--accent-gold-dim);
+  border-radius: 6px; padding: 8px 12px; color: var(--text-cream);
+  font-family: 'Inter', sans-serif; font-size: .95rem; outline: none; text-align: center;
+}
+.extra-custom-row input:focus { border-color: var(--accent-gold); }
+.extra-custom-row button {
+  background: var(--accent-gold-dim); border: 1px solid var(--accent-gold-dim);
+  color: var(--accent-gold); border-radius: 6px; padding: 0 14px;
+  font-family: 'Oswald', sans-serif; font-size: .82rem; text-transform: uppercase; cursor: pointer;
+}
+.extra-custom-row button:hover { background: var(--accent-gold); color: #1A1409; }
+.extra-skip { background: none; border: none; color: var(--text-muted); font-size: .8rem; text-decoration: underline; cursor: pointer; align-self: center; }
+.extra-final-note { font-size: .85rem; color: var(--accent-gold); text-align: center; }
+
+/* ── nav ── */
+.nav-row { display: flex; gap: 12px; }
+.btn-nav {
+  flex: 1; padding: 14px; border: none; border-radius: var(--radius);
+  font-family: 'Oswald', sans-serif; font-size: .9rem;
+  letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+  transition: filter .15s;
+}
+.btn-nav.secondary {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  color: var(--accent-gold);
+}
+.btn-nav.secondary:hover { background: var(--bg-panel-hover); }
+.btn-nav.primary { background: var(--accent-gold); color: #1A1409; }
+.btn-nav.primary:hover { filter: brightness(1.08); }
+.btn-nav:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+
+/* ── finish ── */
+.finish-card {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 28px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center;
+}
+.finish-trophy { font-size: 3rem; }
+.finish-title { font-family: 'Oswald', sans-serif; font-size: 1.6rem; font-weight: 700; }
+.finish-subtitle { color: var(--text-muted); font-size: .9rem; }
+.final-scores { display: flex; gap: 24px; justify-content: center; margin: 8px 0; }
+.final-player { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.final-player .fname { font-family: 'Oswald', sans-serif; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.final-player .fscore { font-family: 'Oswald', sans-serif; font-size: 2.5rem; font-weight: 700; }
+.final-player.winner .fscore { color: var(--accent-gold); }
+.final-sep { font-family: 'Oswald', sans-serif; font-size: 1.2rem; color: var(--text-muted); align-self: center; }
+.winner-label { font-family: 'Oswald', sans-serif; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-green); padding: 2px 8px; border-radius: 999px; background: rgba(78,168,122,.15); }
+
+.question-summary { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.question-summary th { font-family: 'Oswald', sans-serif; font-size: .7rem; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); padding: 6px 10px; border-bottom: 1px solid var(--accent-gold-dim); text-align: left; }
+.question-summary td { padding: 9px 10px; border-bottom: 1px solid rgba(216,168,78,.06); }
+.question-summary tr:last-child td { border-bottom: none; }
+
+/* ── revisión / edición post-resultado ── */
+.review-hint { font-size: .8rem; color: var(--text-muted); text-align: center; }
+.toggle-mark {
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  font-size: 1.05rem; line-height: 1; padding: 4px 8px; cursor: pointer;
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.toggle-mark:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold-dim); transform: scale(1.08); }
+.toggle-mark:active { transform: scale(.92); }
+
+.extra-edit-row { display: flex; gap: 24px; justify-content: center; padding-top: 4px; }
+.extra-edit-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.extra-edit-label { font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.extra-edit-controls { display: flex; align-items: center; gap: 10px; }
+.extra-edit-value { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--accent-gold); min-width: 26px; text-align: center; transition: transform .15s; }
+.extra-edit-value.bump { transform: scale(1.2); }
+.extra-btn.small { width: 40px; height: 40px; font-size: 1.3rem; }
+
+.btn-primary {
+  width: 100%; padding: 16px; border: none; border-radius: var(--radius);
+  background: var(--accent-gold); color: #1A1409;
+  font-family: 'Oswald', sans-serif; font-size: 1rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer;
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-outline {
+  width: 100%; padding: 14px; border: 1px solid var(--accent-gold-dim); border-radius: var(--radius);
+  background: none; color: var(--accent-gold);
+  font-family: 'Oswald', sans-serif; font-size: .9rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer;
+}
+.btn-outline:hover { background: var(--bg-panel-hover); }
+
+.btn-restart {
+  align-self: center; width: auto; padding: 10px 16px;
+  border: 1px solid rgba(199,84,80,.4); border-radius: 8px;
+  background: none; color: var(--accent-red);
+  font-family: 'Inter', sans-serif; font-size: .82rem;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.btn-restart:hover { background: rgba(199,84,80,.12); border-color: var(--accent-red); }
+
+.error-state { text-align: center; color: var(--accent-red); padding: 60px 0; font-family: 'Oswald', sans-serif; text-transform: uppercase; }
+
+/* ── selección de modo de evaluación ── */
+.mode-card {
+  background: var(--bg-panel); border: 2px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 22px 20px;
+  display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.mode-card:hover { border-color: var(--accent-gold); background: var(--bg-panel-hover); }
+.mode-card-title { font-family: 'Oswald', sans-serif; font-size: 1.05rem; letter-spacing: .03em; text-transform: uppercase; color: var(--accent-gold); }
+.mode-card-sub { font-size: .88rem; line-height: 1.5; color: var(--text-muted); }
+
+/* ── resultados ocultos (suspenso) ── */
+.hidden-results-panel {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--bg-panel); border: 1px dashed var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 32px 18px; text-align: center;
+}
+.hidden-results-panel .lock-icon { font-size: 2rem; }
+.hidden-results-panel .lock-text { color: var(--text-muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase">Cargando…</p></div>
+
+<script src="storage.js"></script>
+<script>
+
+// ── URL params ──
+const params    = new URLSearchParams(location.search);
+const tid       = params.get('tid');
+const roundIdx  = parseInt(params.get('round') ?? '0', 10);
+const matchIdx  = parseInt(params.get('match') ?? '0', 10);
+const backUrl   = `Jornada.html?tid=${encodeURIComponent(tid)}&round=${roundIdx}`;
+
+// ── State ──
+let turnData = [];      // ver estructura abajo
+let currentQ = 0;
+let currentSide = 'home';
+let turnPhase = 'question'; // 'question' | 'answer' | 'result'
+let phase = 'eval'; // 'mode-select' | 'eval' | 'extra' | 'finish'
+
+let evalMode = null; // 'alternating' | 'sequential' — modo de este enfrentamiento
+let resultsRevealed = false; // revelado temporal (por sesión) cuando el torneo oculta resultados
+
+let buffetHome = [];
+let buffetAway  = [];
+
+// ── ronda extra: puntos que pueden definir el enfrentamiento ──
+let extraScores = { home: 0, away: 0 };
+let extraSide = 'home'; // 'home' | 'away' — primero uno, luego el otro
+
+// ── cuenta regresiva manual antes de mostrar la respuesta ──
+let countdownSeconds = 5;       // duración por defecto
+let countdownRemaining = null;  // null = no iniciada; número = corriendo
+let countdownTimer = null;      // referencia al setInterval
+
+function stopCountdown() {
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  countdownRemaining = null;
+}
+
+function startCountdown() {
+  if (countdownRemaining !== null) return; // ya está corriendo
+  countdownRemaining = countdownSeconds;
+  render();
+  countdownTimer = setInterval(() => {
+    countdownRemaining--;
+    const el = document.getElementById('countdownNum');
+    if (el) el.textContent = countdownRemaining;
+    if (countdownRemaining <= 0) {
+      revealAnswer();
+    }
+  }, 1000);
+}
+
+function revealAnswer() {
+  stopCountdown();
+  turnPhase = 'answer';
+  render();
+  persistProgress();
+}
+
+function contentTypeOf(t) {
+  return t.contentType === 'buffet' ? 'buffet' : t.contentType === 'individual' ? 'individual' : 'shared';
+}
+
+// Convierte [{ Tema, questions:[q1,q2,q3] }, ...] en una ronda por pregunta:
+// [{ Tema, question:q1 }, { Tema, question:q2 }, { Tema, question:q3 }, ...]
+// así cada tema aporta 3 rondas en vez de 1.
+function flattenBuffet(grouped) {
+  const items = [];
+  grouped.forEach(g => {
+    (g.questions || []).forEach(q => items.push({ Tema: g.Tema, question: q }));
+  });
+  return items;
+}
+
+function totalUnits(t, m) {
+  if (contentTypeOf(t) === 'buffet') return Math.max(buffetHome.length, buffetAway.length, 1);
+  return sharedQuestionsForRound(t, roundIdx).length;
+}
+
+function init() {
+  const t = getTournament(tid);
+  if (!t) { render(); return; }
+  const m = t.rounds[roundIdx]?.[matchIdx];
+  if (!m) { render(); return; }
+
+  if (t.contentType === 'buffet') {
+    buffetHome = flattenBuffet(buffetTemasForParticipant(t, m.home));
+    buffetAway  = flattenBuffet(buffetTemasForParticipant(t, m.away));
+  }
+
+  const total = totalUnits(t, m);
+  resultsRevealed = false;
+  stopCountdown();
+
+  if (m.result?.questionScores) {
+    // ── Enfrentamiento ya evaluado: ir directo a revisión/edición ──
+    turnData = m.result.questionScores.map(s => ({
+      home: { question: s.homeQ || null, correct: s.homeC ?? null },
+      away: { question: s.awayQ || null, correct: s.awayC ?? null }
+    }));
+    while (turnData.length < total) turnData.push(emptyTurn());
+    if (turnData.length > total) turnData = turnData.slice(0, total);
+
+    extraScores = { home: m.result?.extraHome ?? 0, away: m.result?.extraAway ?? 0 };
+    extraSide = 'home';
+    evalMode = m.evalMode || 'alternating';
+    currentQ = 0; currentSide = 'home'; turnPhase = 'question';
+    phase = 'finish';
+
+  } else if (m.progress) {
+    // ── Retomar una evaluación en curso, incluso si quedó a medias en otro momento ──
+    const p = m.progress;
+    evalMode = p.evalMode || m.evalMode || null;
+    turnData = Array.isArray(p.turnData) && p.turnData.length ? p.turnData.map(td => ({
+      home: { question: td.home?.question ?? null, correct: td.home?.correct ?? null },
+      away: { question: td.away?.question ?? null, correct: td.away?.correct ?? null }
+    })) : Array.from({ length: total }, () => emptyTurn());
+    while (turnData.length < total) turnData.push(emptyTurn());
+    if (turnData.length > total) turnData = turnData.slice(0, total);
+
+    currentQ = Math.min(Math.max(p.currentQ ?? 0, 0), Math.max(total - 1, 0));
+    currentSide = p.currentSide === 'away' ? 'away' : 'home';
+    turnPhase = p.turnPhase || 'question';
+    extraScores = p.extraScores ? { ...p.extraScores } : { home: 0, away: 0 };
+    extraSide = p.extraSide === 'away' ? 'away' : 'home';
+    phase = p.phase || (evalMode ? 'eval' : 'mode-select');
+
+  } else {
+    // ── Enfrentamiento nuevo ──
+    turnData = Array.from({ length: total }, () => emptyTurn());
+    evalMode = m.evalMode || null;
+    currentQ = 0; currentSide = 'home'; turnPhase = 'question';
+    extraScores = { home: 0, away: 0 }; extraSide = 'home';
+    phase = evalMode ? 'eval' : 'mode-select';
+  }
+
+  render();
+}
+
+// ── Autosave de progreso (permite retomar de forma asincrónica) ──
+function persistProgress() {
+  const t = getTournament(tid);
+  if (!t) return;
+  const m = t.rounds[roundIdx]?.[matchIdx];
+  if (!m || m.result) return; // ya guardado como resultado final: no hace falta progreso
+  if (evalMode) m.evalMode = evalMode;
+  m.progress = {
+    evalMode,
+    currentQ,
+    currentSide,
+    turnPhase,
+    phase,
+    extraScores: { ...extraScores },
+    extraSide,
+    turnData: turnData.map(td => ({
+      home: { question: td.home.question, correct: td.home.correct },
+      away: { question: td.away.question, correct: td.away.correct }
+    }))
+  };
+  saveTournament(t);
+}
+
+function emptyTurn() {
+  return {
+    home: { question: null, correct: null },
+    away: { question: null, correct: null }
+  };
+}
+
+function getTotals() {
+  let home = 0, away = 0;
+  turnData.forEach(t => {
+    if (t.home.correct === true) home++;
+    if (t.away.correct === true) away++;
+  });
+  home += extraScores.home || 0;
+  away += extraScores.away || 0;
+  return { home, away };
+}
+
+// ── render ──
+function render() {
+  const t = getTournament(tid);
+  if (!t) { document.getElementById('app').innerHTML = `<p class="error-state">Torneo no encontrado.</p>`; return; }
+  const m = t.rounds[roundIdx]?.[matchIdx];
+  if (!m) { document.getElementById('app').innerHTML = `<p class="error-state">Enfrentamiento no encontrado.</p>`; return; }
+  if (phase === 'finish') { renderFinish(t, m); return; }
+  if (phase === 'extra') { renderExtra(t, m); return; }
+  if (phase === 'mode-select') { renderModeSelect(t, m); return; }
+  if (phase === 'sequential-select') { renderSequentialSelect(t, m); return; }
+  renderEval(t, m);
+}
+
+function renderModeSelect(t, m) {
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <a class="back-link" href="${backUrl}">← Jornada ${roundIdx + 1}</a>
+
+      <header class="page-header">
+        <span class="eyebrow">${esc(m.home)} vs ${esc(m.away)}</span>
+        <h1>¿Cómo van a responder?</h1>
+      </header>
+
+      <div class="mode-card" data-action="choose-mode" data-mode="alternating">
+        <span class="mode-card-title">🔀 Alternado</span>
+        <span class="mode-card-sub">Una pregunta a cada uno, por turnos, en el mismo momento — así funcionaba antes.</span>
+      </div>
+
+      <div class="mode-card" data-action="choose-mode" data-mode="sequential">
+        <span class="mode-card-title">➡️ Uno por uno</span>
+        <span class="mode-card-sub">Uno responde todas sus preguntas primero y después el otro las suyas. Pueden hacerlo en momentos distintos: el progreso queda guardado.</span>
+      </div>
+    </div>`;
+}
+
+function renderSequentialSelect(t, m) {
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <a class="back-link" href="${backUrl}">← Jornada ${roundIdx + 1}</a>
+
+      <header class="page-header">
+        <span class="eyebrow">${esc(m.home)} vs ${esc(m.away)} · Uno por uno</span>
+        <h1>¿Quién empieza?</h1>
+      </header>
+
+      <div class="mode-card" data-action="choose-starter" data-side="home">
+        <span class="mode-card-title">🥇 ${esc(m.home)}</span>
+        <span class="mode-card-sub">Responde primero todas sus preguntas.</span>
+      </div>
+
+      <div class="mode-card" data-action="choose-starter" data-side="away">
+        <span class="mode-card-title">🥈 ${esc(m.away)}</span>
+        <span class="mode-card-sub">Responde primero todas sus preguntas.</span>
+      </div>
+
+      <div class="nav-row">
+        <button class="btn-nav secondary" data-action="back-to-mode">← Cambiar modo</button>
+      </div>
+
+      <button class="btn-restart" data-action="restart-match">↺ Reiniciar enfrentamiento (elegir modo de nuevo)</button>
+    </div>`;
+}
+
+function renderEval(t, m) {
+  const total = totalUnits(t, m);
+  const totals = getTotals();
+  const mode = contentTypeOf(t);
+
+  ensureQuestion(t, m, currentQ);
+
+  const td = turnData[currentQ];
+  const sideData = td[currentSide];
+  const sideName = currentSide === 'home' ? m.home : m.away;
+  const otherSide = currentSide === 'home' ? 'away' : 'home';
+
+  const dots = Array.from({ length: total }, (_, i) => {
+    const d = turnData[i];
+    const doneFlag = evalMode === 'sequential'
+      ? d[currentSide].correct !== null
+      : (d.home.correct !== null && d.away.correct !== null);
+    let cls = 'q-dot';
+    if (i === currentQ) cls += ' current';
+    else if (doneFlag) cls += ' scored';
+    return `<div class="${cls}" data-action="go-q" data-qi="${i}" title="Pregunta ${i+1}"></div>`;
+  }).join('');
+
+  let mainHtml = '';
+  const q = sideData.question;
+  const TemaLabel = mode === 'buffet' ? ` · Tema ${getTemaForSide(currentQ, currentSide)}` : '';
+  const turnInfo = `
+    <div class="turn-indicator">
+      <div class="turn-dot ${currentSide}"></div>
+      <div>
+        <div class="turn-text">${esc(sideName)}${TemaLabel}</div>
+        <div class="turn-sub">Pregunta ${currentQ + 1} de ${total}</div>
+      </div>
+    </div>`;
+
+  const questionCard = `
+    <div class="question-card">
+      <div class="question-number">Pregunta ${currentQ + 1}</div>
+      <div class="question-text">${esc(q?.pregunta || 'Sin pregunta')}</div>
+    </div>`;
+
+  if (turnPhase === 'question') {
+    // ── FASE 1: Participante responde en voz alta ──
+    if (countdownRemaining === null) {
+      mainHtml = `
+        ${turnInfo}
+        ${questionCard}
+        <div class="countdown-controls">
+          <button class="btn-countdown-start" data-action="start-countdown">⏱️ Iniciar cuenta regresiva (${countdownSeconds}s)</button>
+          <button class="btn-show-answer" data-action="show-answer">👁️ Mostrar respuesta ahora</button>
+        </div>`;
+    } else {
+      mainHtml = `
+        ${turnInfo}
+        ${questionCard}
+        <div class="countdown-display">
+          <div class="countdown-number" id="countdownNum">${countdownRemaining}</div>
+          <div class="countdown-caption">Tiempo para responder…</div>
+        </div>
+        <button class="btn-show-answer" data-action="show-answer">👁️ Mostrar respuesta ahora</button>`;
+    }
+
+  } else if (turnPhase === 'answer') {
+    // ── FASE 2: Se muestra la respuesta correcta, evaluador juzga ──
+    mainHtml = `
+      ${turnInfo}
+      ${questionCard}
+      <div class="answer-reveal">
+        <span class="reveal-label">Respuesta correcta</span>
+        <div class="reveal-value">${esc(q?.respuesta || '—')}</div>
+      </div>
+      <div class="judge-row">
+        <button class="judge-btn correct" data-action="judge" data-verdict="correct">🟢 Bien</button>
+        <button class="judge-btn wrong" data-action="judge" data-verdict="wrong">🔴 Mal</button>
+      </div>`;
+
+  } else if (turnPhase === 'result') {
+    // ── FASE 3: Resultado + justificación si falló ──
+    const isCorrect = sideData.correct;
+
+    let resultCard;
+    if (isCorrect) {
+      resultCard = `
+        <div class="result-card">
+          <div class="result-badge correct">✅ ¡Correcto!</div>
+          <div>
+            <div class="result-label">Respuesta</div>
+            <div class="result-value">${esc(q?.respuesta || '')}</div>
+          </div>
+        </div>`;
+    } else {
+      resultCard = `
+        <div class="result-card">
+          <div class="result-badge wrong">❌ Incorrecto</div>
+          <div>
+            <div class="result-label">Respuesta correcta</div>
+            <div class="result-value">${esc(q?.respuesta || '')}</div>
+          </div>
+          ${q?.justificacion ? `
+            <div class="justification-box">
+              <div class="justification-label">Justificación</div>
+              ${esc(q.justificacion)}
+            </div>
+          ` : ''}
+        </div>`;
+    }
+
+    let nextBtn;
+    let prevDisabled;
+    if (evalMode === 'sequential') {
+      // Uno por uno: en cuanto este participante termina TODAS sus preguntas,
+      // pasa directo a SU ronda extra (no espera a que el otro responda).
+      if (currentQ < total - 1) {
+        nextBtn = `<button class="btn-nav primary" data-action="next-q">Siguiente pregunta →</button>`;
+      } else {
+        nextBtn = `<button class="btn-nav primary" data-action="go-extra">Ronda extra de ${esc(sideName)} →</button>`;
+      }
+      prevDisabled = currentQ === 0;
+    } else {
+      const otherDone = turnData[currentQ][otherSide].correct !== null;
+      if (!otherDone) {
+        const nextName = currentSide === 'home' ? m.away : m.home;
+        nextBtn = `<button class="btn-nav primary" data-action="next-player">Siguiente: ${esc(nextName)} →</button>`;
+      } else if (currentQ < total - 1) {
+        nextBtn = `<button class="btn-nav primary" data-action="next-q">Siguiente pregunta →</button>`;
+      } else {
+        nextBtn = `<button class="btn-nav primary" data-action="go-extra">Ronda extra →</button>`;
+      }
+      prevDisabled = currentQ === 0 && currentSide === 'home';
+    }
+
+    mainHtml = `
+      ${turnInfo}
+      ${resultCard}
+      <div class="nav-row">
+        <button class="btn-nav secondary" data-action="prev-q" ${prevDisabled ? 'disabled' : ''}>← Anterior</button>
+        ${nextBtn}
+      </div>`;
+  }
+
+  const hideRes = t.hideResults && !resultsRevealed;
+  const modeLabel = evalMode === 'sequential' ? ' · Uno por uno' : evalMode === 'alternating' ? ' · Alternado' : '';
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <a class="back-link" href="${backUrl}">← Jornada ${roundIdx + 1}</a>
+
+      <header class="page-header">
+        <span class="eyebrow">${esc(m.home)} vs ${esc(m.away)}${modeLabel}</span>
+        <h1>Evaluación</h1>
+      </header>
+
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span>Pregunta ${currentQ + 1} de ${total} · ${sideName}</span>
+          <span>${Math.round((currentQ / total) * 100)}%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${Math.round((currentQ / total) * 100)}%"></div></div>
+        <div class="q-dots">${dots}</div>
+      </div>
+
+      <div class="scoreboard">
+        <div class="player-col">
+          <div class="player-name">${esc(m.home)}</div>
+          <div class="player-score" id="scoreHome">${hideRes ? '🔒' : totals.home}</div>
+        </div>
+        <div class="score-divider">—</div>
+        <div class="player-col">
+          <div class="player-name">${esc(m.away)}</div>
+          <div class="player-score" id="scoreAway">${hideRes ? '🔒' : totals.away}</div>
+        </div>
+      </div>
+      ${t.hideResults ? `<button class="btn-outline" data-action="toggle-reveal">${resultsRevealed ? '🙈 Ocultar de nuevo' : '👁 Revelar resultados'}</button>` : ''}
+
+      ${mainHtml}
+
+      <button class="btn-restart" data-action="restart-match">↺ Reiniciar enfrentamiento (elegir modo de nuevo)</button>
+    </div>`;
+}
+
+// ── helpers ──
+function ensureQuestion(t, m, qi) {
+  const td = turnData[qi];
+  if (td.home.question === null) td.home.question = pickQuestion(t, m, qi, 'home');
+  if (td.away.question === null) td.away.question = pickQuestion(t, m, qi, 'away');
+}
+
+function pickQuestion(t, m, qi, side) {
+  if (t.contentType === 'buffet') {
+    const items = side === 'home' ? buffetHome : buffetAway;
+    return items[qi]?.question || null;
+  }
+  return sharedQuestionsForRound(t, roundIdx)[qi] || null;
+}
+
+function getTemaForSide(qi, side) {
+  const items = side === 'home' ? buffetHome : buffetAway;
+  return items[qi]?.Tema ?? (qi + 1);
+}
+
+function bump(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
+  setTimeout(() => el.classList.remove('bump'), 300);
+}
+
+// ── Ronda extra: puntos que pueden definir el enfrentamiento ──
+function renderExtra(t, m) {
+  const name = extraSide === 'home' ? m.home : m.away;
+  const score = extraScores[extraSide] ?? 0;
+
+  if (evalMode === 'sequential') {
+    // Uno por uno: ronda extra individual, apenas ese participante termina
+    // sus preguntas. No se alterna con el otro acá — el otro todavía tiene
+    // que responder sus propias preguntas (o ya terminó todo, y entonces
+    // esta era su ronda extra final).
+    const otherSide = extraSide === 'home' ? 'away' : 'home';
+    const otherName = otherSide === 'home' ? m.home : m.away;
+    const otherQuestionsDone = turnData.every(d => d[otherSide].correct !== null);
+
+    document.getElementById('app').innerHTML = `
+      <div class="page">
+        <a class="back-link" href="${backUrl}">← Jornada ${roundIdx + 1}</a>
+
+        <header class="page-header">
+          <span class="eyebrow">${esc(m.home)} vs ${esc(m.away)} · Uno por uno</span>
+          <h1>Ronda extra de ${esc(name)}</h1>
+        </header>
+
+        <div class="extra-intro">
+          <span class="extra-intro-title">Puntos extra</span>
+          <span class="extra-intro-sub">${esc(name)} ya respondió todas sus preguntas. Asignale acá sus puntos extra.</span>
+        </div>
+
+        <div class="extra-card">
+          <div class="extra-player-name">${esc(name)}</div>
+          <div class="extra-score-display" id="extraScore">${score}</div>
+          <div class="extra-score-btns">
+            <button class="extra-btn minus" data-action="extra-delta" data-delta="-1">−</button>
+            <button class="extra-btn plus"  data-action="extra-delta" data-delta="1">+</button>
+          </div>
+          <div class="extra-custom-row">
+            <input id="extraCustom" type="number" min="0" placeholder="Pts directos">
+            <button data-action="extra-set">OK</button>
+          </div>
+        </div>
+
+        <div class="nav-row">
+          ${otherQuestionsDone
+            ? `<button class="btn-nav primary" data-action="finish">Ver resultado ✓</button>`
+            : `<button class="btn-nav primary" data-action="extra-to-other">Turno de ${esc(otherName)} →</button>`}
+        </div>
+
+        <button class="extra-skip" data-action="extra-skip">Saltar esta ronda extra</button>
+
+        <button class="btn-restart" data-action="restart-match">↺ Reiniciar enfrentamiento (elegir modo de nuevo)</button>
+      </div>`;
+    return;
+  }
+
+  // Alternado: se le asignan puntos primero a uno y después al otro, seguido.
+  const isLast = extraSide === 'away';
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <a class="back-link" href="${backUrl}">← Jornada ${roundIdx + 1}</a>
+
+      <header class="page-header">
+        <span class="eyebrow">${esc(m.home)} vs ${esc(m.away)}</span>
+        <h1>Ronda extra</h1>
+      </header>
+
+      <div class="extra-intro">
+        <span class="extra-intro-title">Puntos extra</span>
+        <span class="extra-intro-sub">Asigná puntos a un jugador y después al otro. Pueden definir quién gana.</span>
+      </div>
+
+      <div class="extra-progress">${esc(name)} · ${extraSide === 'home' ? '1' : '2'} de 2</div>
+
+      <div class="extra-card">
+        <div class="extra-player-name">${esc(name)}</div>
+        <div class="extra-score-display" id="extraScore">${score}</div>
+        <div class="extra-score-btns">
+          <button class="extra-btn minus" data-action="extra-delta" data-delta="-1">−</button>
+          <button class="extra-btn plus"  data-action="extra-delta" data-delta="1">+</button>
+        </div>
+        <div class="extra-custom-row">
+          <input id="extraCustom" type="number" min="0" placeholder="Pts directos">
+          <button data-action="extra-set">OK</button>
+        </div>
+      </div>
+
+      <div class="nav-row">
+        <button class="btn-nav secondary" data-action="extra-prev" ${extraSide === 'home' ? 'disabled' : ''}>← Anterior</button>
+        ${isLast
+          ? `<button class="btn-nav primary" data-action="finish">Ver resultado ✓</button>`
+          : `<button class="btn-nav primary" data-action="extra-next">Siguiente →</button>`}
+      </div>
+
+      <button class="extra-skip" data-action="extra-skip">Saltar ronda extra</button>
+
+      <button class="btn-restart" data-action="restart-match">↺ Reiniciar enfrentamiento (elegir modo de nuevo)</button>
+    </div>`;
+}
+
+// ── Finish ──
+function renderFinish(t, m) {
+  const total = totalUnits(t, m);
+  const totals = getTotals();
+
+  if (t.hideResults && !resultsRevealed) {
+    document.getElementById('app').innerHTML = `
+      <div class="page">
+        <a class="back-link" href="${backUrl}">← Jornada ${roundIdx+1}</a>
+        <div class="hidden-results-panel">
+          <span class="lock-icon">🔒</span>
+          <span class="lock-text">El resultado de ${esc(m.home)} vs ${esc(m.away)} está oculto.</span>
+          <button class="btn-primary" data-action="toggle-reveal">👁 Revelar resultado</button>
+        </div>
+        <button class="btn-primary" data-action="save">Guardar y volver</button>
+      </div>`;
+    return;
+  }
+
+  const isHome = totals.home > totals.away;
+  const isAway = totals.away > totals.home;
+  const isDraw = totals.home === totals.away;
+  const winnerName = isHome ? m.home : (isAway ? m.away : null);
+  const trophy = isDraw ? '🤝' : '🏆';
+  const title = isDraw ? 'Empate' : `¡Ganó ${esc(winnerName)}!`;
+
+  const summaryRows = turnData.map((td, i) => {
+    const hOk = td.home.correct === true;
+    const aOk = td.away.correct === true;
+    return `<tr>
+      <td style="color:var(--text-muted)">${i+1}</td>
+      <td style="font-size:.82rem">${esc(td.home.question?.pregunta || '—')}</td>
+      <td style="text-align:center">
+        <button class="toggle-mark" data-action="toggle-mark" data-qi="${i}" data-side="home" title="Tocar para corregir">${hOk ? '✅' : '❌'}</button>
+      </td>
+      <td style="font-size:.82rem">${esc(td.away.question?.pregunta || '—')}</td>
+      <td style="text-align:center">
+        <button class="toggle-mark" data-action="toggle-mark" data-qi="${i}" data-side="away" title="Tocar para corregir">${aOk ? '✅' : '❌'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <a class="back-link" href="${backUrl}">← Jornada ${roundIdx+1}</a>
+      ${t.hideResults ? `<button class="btn-outline" data-action="toggle-reveal" style="align-self:center">🙈 Ocultar de nuevo</button>` : ''}
+
+      <div class="finish-card">
+        <div class="finish-trophy">${trophy}</div>
+        <div class="finish-title">${title}</div>
+        <div class="finish-subtitle">${esc(m.home)} vs ${esc(m.away)}</div>
+        <div class="final-scores">
+          <div class="final-player ${isHome?'winner':''}">
+            <span class="fname">${esc(m.home)}</span>
+            <span class="fscore">${totals.home}</span>
+            ${isHome?'<span class="winner-label">🏆 Ganador</span>':''}
+          </div>
+          <div class="final-sep">—</div>
+          <div class="final-player ${isAway?'winner':''}">
+            <span class="fname">${esc(m.away)}</span>
+            <span class="fscore">${totals.away}</span>
+            ${isAway?'<span class="winner-label">🏆 Ganador</span>':''}
+          </div>
+        </div>
+        <div class="extra-edit-row">
+          <div class="extra-edit-col">
+            <span class="extra-edit-label">${esc(m.home)} · extra</span>
+            <div class="extra-edit-controls">
+              <button class="extra-btn minus small" data-action="finish-extra-delta" data-side="home" data-delta="-1">−</button>
+              <span class="extra-edit-value" id="extraFinishHome">${extraScores.home || 0}</span>
+              <button class="extra-btn plus small" data-action="finish-extra-delta" data-side="home" data-delta="1">+</button>
+            </div>
+          </div>
+          <div class="extra-edit-col">
+            <span class="extra-edit-label">${esc(m.away)} · extra</span>
+            <div class="extra-edit-controls">
+              <button class="extra-btn minus small" data-action="finish-extra-delta" data-side="away" data-delta="-1">−</button>
+              <span class="extra-edit-value" id="extraFinishAway">${extraScores.away || 0}</span>
+              <button class="extra-btn plus small" data-action="finish-extra-delta" data-side="away" data-delta="1">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="review-hint">Tocá un ✅/❌ para corregir esa pregunta. Los totales y el ganador se recalculan solos.</p>
+
+      <div style="background:var(--bg-panel);border:1px solid var(--accent-gold-dim);border-radius:var(--radius);overflow:hidden">
+        <table class="question-summary">
+          <thead><tr><th>#</th><th>${esc(m.home)}</th><th style="text-align:center">✓</th><th>${esc(m.away)}</th><th style="text-align:center">✓</th></tr></thead>
+          <tbody>${summaryRows}</tbody>
+        </table>
+      </div>
+
+      <button class="btn-primary" data-action="save">Guardar cambios</button>
+      <button class="btn-outline" data-action="re-eval">← Re-evaluar desde cero</button>
+    </div>`;
+}
+
+// ── Events ──
+document.getElementById('app').addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+
+  if (action === 'start-countdown') {
+    startCountdown();
+
+  } else if (action === 'choose-mode') {
+    evalMode = el.dataset.mode;
+    if (evalMode === 'sequential') {
+      // En "uno por uno" se pregunta quién empieza, en vez de arrancar
+      // automáticamente con el primero (home) por defecto.
+      phase = 'sequential-select';
+    } else {
+      currentSide = 'home';
+      phase = 'eval';
+    }
+    render();
+
+  } else if (action === 'choose-starter') {
+    currentSide = el.dataset.side === 'away' ? 'away' : 'home';
+    phase = 'eval';
+    render();
+
+  } else if (action === 'back-to-mode') {
+    evalMode = null;
+    phase = 'mode-select';
+    render();
+
+  } else if (action === 'toggle-reveal') {
+    resultsRevealed = !resultsRevealed;
+    render();
+
+  } else if (action === 'show-answer') {
+    // Participante ya respondió en voz alta (o se saltea el tiempo) → mostrar respuesta correcta
+    revealAnswer();
+
+  } else if (action === 'judge') {
+    // Evaluador presiona 🟢 o 🔴
+    stopCountdown();
+    const verdict = el.dataset.verdict;
+    const sideData = turnData[currentQ][currentSide];
+    sideData.correct = verdict === 'correct';
+    turnPhase = 'result';
+
+    const t2 = getTournament(tid);
+    const hideRes = t2?.hideResults && !resultsRevealed;
+    const totals = getTotals();
+    const hEl = document.getElementById('scoreHome');
+    const aEl = document.getElementById('scoreAway');
+    if (hEl) { hEl.textContent = hideRes ? '🔒' : totals.home; if (currentSide === 'home' && sideData.correct) bump('scoreHome'); }
+    if (aEl) { aEl.textContent = hideRes ? '🔒' : totals.away; if (currentSide === 'away' && sideData.correct) bump('scoreAway'); }
+    render();
+
+  } else if (action === 'next-player') {
+    // Modo "alternado": pasa al otro participante dentro de la misma pregunta.
+    stopCountdown();
+    currentSide = currentSide === 'home' ? 'away' : 'home';
+    turnPhase = 'question';
+    render();
+
+  } else if (action === 'next-q') {
+    stopCountdown();
+    const t = getTournament(tid);
+    const m = t?.rounds[roundIdx]?.[matchIdx];
+    if (t && m && currentQ < totalUnits(t, m) - 1) {
+      currentQ++;
+      if (evalMode !== 'sequential') currentSide = 'home';
+      turnPhase = 'question'; render();
+    }
+
+  } else if (action === 'prev-q') {
+    stopCountdown();
+    if (evalMode === 'sequential') {
+      if (currentQ > 0) { currentQ--; turnPhase = 'result'; }
+    } else if (currentSide === 'away' && turnPhase === 'result') {
+      currentSide = 'home'; turnPhase = 'result';
+    } else if (currentQ > 0) {
+      currentQ--; currentSide = 'away'; turnPhase = 'result';
+    }
+    render();
+
+  } else if (action === 'go-q') {
+    stopCountdown();
+    currentQ = +el.dataset.qi;
+    if (evalMode !== 'sequential') currentSide = 'home';
+    turnPhase = 'question'; render();
+
+  } else if (action === 'finish') {
+    stopCountdown();
+    phase = 'finish'; render();
+
+  } else if (action === 're-eval') {
+    stopCountdown();
+    currentQ = 0; currentSide = 'home'; turnPhase = 'question'; extraSide = 'home';
+    phase = evalMode === 'sequential' ? 'sequential-select' : 'eval';
+    render();
+
+  } else if (action === 'restart-match') {
+    // Reinicia por completo un enfrentamiento parcialmente iniciado: borra todas
+    // las respuestas registradas y vuelve a la pantalla de elegir modo
+    // (alternado / uno por uno), como si nunca se hubiera empezado.
+    if (!confirm('¿Reiniciar este enfrentamiento? Se borrarán las respuestas registradas y vas a tener que elegir de nuevo el modo (alternado / uno por uno).')) return;
+    stopCountdown();
+    const t2 = getTournament(tid);
+    const m2 = t2?.rounds[roundIdx]?.[matchIdx];
+    const total2 = t2 && m2 ? totalUnits(t2, m2) : 0;
+    turnData = Array.from({ length: total2 }, () => emptyTurn());
+    evalMode = null;
+    currentQ = 0; currentSide = 'home'; turnPhase = 'question';
+    extraScores = { home: 0, away: 0 }; extraSide = 'home';
+    phase = 'mode-select';
+    if (t2 && m2) {
+      delete m2.progress;
+      delete m2.evalMode;
+      saveTournament(t2);
+    }
+    render();
+    return;
+
+  } else if (action === 'go-extra') {
+    stopCountdown();
+    // En "uno por uno" la ronda extra es individual: se le da al que recién
+    // terminó sus preguntas (currentSide), no siempre empezando por "home".
+    extraSide = evalMode === 'sequential' ? currentSide : 'home';
+    phase = 'extra'; render();
+
+  } else if (action === 'extra-to-other') {
+    // Sequential: terminó la ronda extra de un participante → pasa a las
+    // preguntas del otro (que todavía no respondió nada).
+    stopCountdown();
+    const otherSide = currentSide === 'home' ? 'away' : 'home';
+    currentSide = otherSide;
+    currentQ = 0;
+    turnPhase = 'question';
+    phase = 'eval';
+    render();
+
+  } else if (action === 'extra-delta') {
+    extraScores[extraSide] = Math.max(0, (extraScores[extraSide] ?? 0) + +el.dataset.delta);
+    const el2 = document.getElementById('extraScore');
+    if (el2) {
+      el2.textContent = extraScores[extraSide];
+      el2.classList.remove('bump'); void el2.offsetWidth; el2.classList.add('bump');
+      setTimeout(() => el2.classList.remove('bump'), 300);
+    }
+
+  } else if (action === 'extra-set') {
+    const inp = document.getElementById('extraCustom');
+    const val = parseInt(inp?.value ?? '', 10);
+    if (!isNaN(val) && val >= 0) {
+      extraScores[extraSide] = val;
+      if (inp) inp.value = '';
+      const el2 = document.getElementById('extraScore');
+      if (el2) el2.textContent = val;
+    }
+
+  } else if (action === 'extra-prev') {
+    if (extraSide === 'away') { extraSide = 'home'; render(); }
+
+  } else if (action === 'extra-next') {
+    if (extraSide === 'home') { extraSide = 'away'; render(); }
+
+  } else if (action === 'extra-skip') {
+    if (evalMode === 'sequential') {
+      // Solo se saltea la ronda extra de quien está en pantalla ahora;
+      // no toca los puntos del otro participante.
+      extraScores[extraSide] = 0;
+      const otherSide = extraSide === 'home' ? 'away' : 'home';
+      const otherQuestionsDone = turnData.every(d => d[otherSide].correct !== null);
+      if (otherQuestionsDone) {
+        phase = 'finish';
+      } else {
+        currentSide = otherSide; currentQ = 0; turnPhase = 'question'; phase = 'eval';
+      }
+    } else {
+      extraScores = { home: 0, away: 0 };
+      phase = 'finish';
+    }
+    render();
+
+  } else if (action === 'toggle-mark') {
+    // Corregir directamente una pregunta marcada mal, sin re-jugar todo el enfrentamiento.
+    const qi = +el.dataset.qi;
+    const side = el.dataset.side;
+    const sd = turnData[qi]?.[side];
+    if (sd) {
+      sd.correct = sd.correct === true ? false : true;
+      render();
+    }
+
+  } else if (action === 'finish-extra-delta') {
+    // Ajustar puntos de la ronda extra directamente desde la pantalla de resultado.
+    const side = el.dataset.side;
+    extraScores[side] = Math.max(0, (extraScores[side] ?? 0) + +el.dataset.delta);
+    render();
+
+  } else if (action === 'save') {
+    const t = getTournament(tid);
+    if (!t) return;
+    const totals = getTotals();
+    const cleanScores = turnData.map(td => ({
+      home: td.home.correct === true ? 1 : 0,
+      away: td.away.correct === true ? 1 : 0,
+      homeQ: td.home.question,
+      awayQ: td.away.question,
+      homeC: td.home.correct,
+      awayC: td.away.correct
+    }));
+    const m = t.rounds[roundIdx][matchIdx];
+    m.result = {
+      homeScore: totals.home,
+      awayScore: totals.away,
+      extraHome: extraScores.home || 0,
+      extraAway: extraScores.away || 0,
+      questionScores: cleanScores,
+      savedAt: Date.now()
+    };
+    if (evalMode) m.evalMode = evalMode;
+    delete m.progress;
+    saveTournament(t);
+    window.location.href = backUrl;
+  }
+
+  if (action !== 'save') persistProgress();
+});
+
+document.getElementById('app').addEventListener('keydown', e => {
+  if (e.target?.id === 'extraCustom' && e.key === 'Enter') {
+    e.preventDefault();
+    document.querySelector('[data-action="extra-set"]')?.click();
+  }
+});
+
+init();
+</script>
+</body>
+</html>
