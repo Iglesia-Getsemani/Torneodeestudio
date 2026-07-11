@@ -124,6 +124,11 @@ body {
   text-transform: uppercase; cursor: pointer; transition: background .15s, border-color .15s;
 }
 .gen-image-btn:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+.io-row { display: flex; gap: 10px; justify-content: center; }
+.io-row .gen-image-btn { flex: 1; }
+.io-feedback { text-align: center; font-size: .8rem; color: var(--text-muted); margin: -10px 0 0; }
+.io-feedback.error { color: var(--accent-red); }
+.io-feedback.ok { color: var(--accent-green); }
 
 /* promo image modal */
 .image-modal-overlay {
@@ -157,12 +162,13 @@ body {
 <body>
 <div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.04em">Cargando…</p></div>
 <script type="module">
-import { getTournament, esc } from './storage.js';
+import { getTournament, saveTournament, esc } from './storage.js';
 
 const params = new URLSearchParams(location.search);
 const tid = params.get('tid');
 let roundIndex = parseInt(params.get('round') ?? '0', 10);
 let resultsRevealed = false; // revelado temporal (por sesión) cuando el torneo oculta resultados
+let ioMessage = null; // feedback transitorio de exportar/importar jornada { type: 'ok'|'error', text }
 
 function pushRound(idx) {
   const url = new URL(location.href);
@@ -302,6 +308,12 @@ function render() {
 
       <button class="gen-image-btn" data-action="gen-image">🖼 Generar imagen para promocionar</button>
       ${t.hideResults ? `<button class="gen-image-btn" data-action="toggle-reveal">${resultsRevealed ? '🙈 Ocultar resultados de nuevo' : '👁 Revelar resultados de esta jornada'}</button>` : ''}
+      <div class="io-row">
+        <button class="gen-image-btn" data-action="export-round">⬇ Exportar jornada</button>
+        <button class="gen-image-btn" data-action="import-round">⬆ Importar jornada</button>
+      </div>
+      <input type="file" id="import-round-input" accept="application/json,.json" style="display:none">
+      ${ioMessage ? `<p class="io-feedback ${ioMessage.type}">${esc(ioMessage.text)}</p>` : ''}
 
       <section>
         <div class="match-list">${matchesHtml}</div>
@@ -339,8 +351,134 @@ document.getElementById('app').addEventListener('click', e => {
   } else if (action === 'toggle-reveal') {
     resultsRevealed = !resultsRevealed;
     render();
+  } else if (action === 'export-round') {
+    if (t) exportRound(t, roundIndex);
+  } else if (action === 'import-round') {
+    document.getElementById('import-round-input').click();
   }
 });
+
+document.getElementById('app').addEventListener('change', e => {
+  if (e.target.id !== 'import-round-input') return;
+  const file = e.target.files[0];
+  e.target.value = ''; // permite volver a elegir el mismo archivo más adelante
+  if (!file) return;
+  importRound(file);
+});
+
+// ---------- Exportar / Importar jornada ----------
+
+// Exporta los enfrentamientos de la jornada actual (por empezar, en curso o
+// finalizados) a un archivo JSON descargable. Se guarda tanto `result`
+// (enfrentamiento evaluado y cerrado) como `progress` (evaluación a medias,
+// autoguardada) para que la importación pueda restaurar el estado exacto.
+function exportRound(t, roundIndex) {
+  const round = t.rounds[roundIndex];
+  const payload = {
+    kind: 'buffet-jornada-export',
+    version: 1,
+    tournamentId: t.id,
+    tournamentName: t.name,
+    round: roundIndex + 1,
+    matches: round.map(m => ({
+      home: m.home,
+      away: m.away,
+      result: m.result ?? null,
+      progress: m.progress ?? null
+    }))
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const safeName = t.name.replace(/[^\w\-]+/g, '_');
+  const link = document.createElement('a');
+  link.download = `${safeName}_jornada_${roundIndex + 1}.json`;
+  link.href = url;
+  link.click();
+  URL.revokeObjectURL(url);
+  ioMessage = { type: 'ok', text: 'Jornada exportada correctamente.' };
+  render();
+}
+
+// Importa un archivo exportado con exportRound() y aplica los resultados /
+// progresos a la jornada actual, emparejando enfrentamientos por local y
+// visitante (no por posición, así funciona aunque el orden difiera).
+function importRound(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const t = getTournament(tid);
+    if (!t) return;
+    let data;
+    try {
+      data = JSON.parse(reader.result);
+    } catch {
+      ioMessage = { type: 'error', text: 'El archivo no es un JSON válido.' };
+      render();
+      return;
+    }
+    if (!data || data.kind !== 'buffet-jornada-export' || !Array.isArray(data.matches)) {
+      ioMessage = { type: 'error', text: 'El archivo no tiene el formato esperado de una jornada exportada.' };
+      render();
+      return;
+    }
+
+    const round = t.rounds[roundIndex];
+    let applied = 0;
+    const missing = [];
+
+    data.matches.forEach(im => {
+      const m = round.find(rm =>
+        (rm.home === im.home && rm.away === im.away) ||
+        (rm.home === im.away && rm.away === im.home) // por si se exportó con local/visitante invertido
+      );
+      if (!m) { missing.push(`${im.home} vs ${im.away}`); return; }
+
+      const swapped = m.home === im.away && m.away === im.home;
+      const applyResult = r => {
+        if (!r) return null;
+        if (!swapped) return r;
+        // invierte home/away si el emparejamiento vino cambiado
+        const flipped = { ...r };
+        if ('homeScore' in flipped || 'awayScore' in flipped) {
+          [flipped.homeScore, flipped.awayScore] = [flipped.awayScore, flipped.homeScore];
+        }
+        if (flipped.absentSide === 'home') flipped.absentSide = 'away';
+        else if (flipped.absentSide === 'away') flipped.absentSide = 'home';
+        if (Array.isArray(flipped.questionScores)) {
+          flipped.questionScores = flipped.questionScores.map(s => ({ ...s, homeQ: s.awayQ, awayQ: s.homeQ }));
+        }
+        return flipped;
+      };
+      const applyProgress = p => {
+        if (!p) return null;
+        if (!swapped) return p;
+        const flipped = { ...p };
+        if (flipped.extraScores) {
+          flipped.extraScores = { home: flipped.extraScores.away, away: flipped.extraScores.home };
+        }
+        if (Array.isArray(flipped.turnData)) {
+          flipped.turnData = flipped.turnData.map(td => ({ ...td, home: td.away, away: td.home }));
+        }
+        return flipped;
+      };
+
+      m.result = applyResult(im.result);
+      m.progress = applyProgress(im.progress);
+      applied++;
+    });
+
+    saveTournament(t);
+    resultsRevealed = true;
+    const parts = [`${applied} enfrentamiento${applied === 1 ? '' : 's'} importado${applied === 1 ? '' : 's'}.`];
+    if (missing.length) parts.push(`No se encontraron en esta jornada: ${missing.join(', ')}.`);
+    ioMessage = { type: missing.length ? 'error' : 'ok', text: parts.join(' ') };
+    render();
+  };
+  reader.onerror = () => {
+    ioMessage = { type: 'error', text: 'No se pudo leer el archivo.' };
+    render();
+  };
+  reader.readAsText(file);
+}
 
 // ---------- Imagen promocional ----------
 
