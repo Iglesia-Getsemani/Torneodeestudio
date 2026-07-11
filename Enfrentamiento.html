@@ -323,6 +323,27 @@ body {
 .mode-card-title { font-family: 'Oswald', sans-serif; font-size: 1.05rem; letter-spacing: .03em; text-transform: uppercase; color: var(--accent-gold); }
 .mode-card-sub { font-size: .88rem; line-height: 1.5; color: var(--text-muted); }
 
+/* ── inasistencia ── */
+.absent-block {
+  display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center;
+  background: var(--bg-panel); border: 1px dashed var(--accent-red);
+  border-radius: var(--radius); padding: 16px 18px; margin-top: 4px;
+}
+.absent-label { font-family: 'Oswald', sans-serif; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.absent-btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }
+.btn-absent {
+  flex: 1; min-width: 140px; padding: 12px 10px; border: 1px solid rgba(199,84,80,.5);
+  border-radius: 8px; background: rgba(199,84,80,.1); color: var(--accent-red);
+  font-family: 'Oswald', sans-serif; font-size: .82rem; letter-spacing: .02em;
+  text-transform: uppercase; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.btn-absent:hover { background: rgba(199,84,80,.22); border-color: var(--accent-red); }
+.absent-hint { font-size: .78rem; color: var(--text-muted); line-height: 1.4; }
+.absent-tag {
+  font-family: 'Oswald', sans-serif; font-size: .65rem; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--accent-red); padding: 2px 8px; border-radius: 999px; background: rgba(199,84,80,.15);
+}
+
 /* ── resultados ocultos (suspenso) ── */
 .hidden-results-panel {
   display: flex; flex-direction: column; align-items: center; gap: 12px;
@@ -355,6 +376,9 @@ let phase = 'eval'; // 'mode-select' | 'eval' | 'extra' | 'finish'
 
 let evalMode = null; // 'alternating' | 'sequential' — modo de este enfrentamiento
 let resultsRevealed = false; // revelado temporal (por sesión) cuando el torneo oculta resultados
+
+// ── inasistencia: participante que no se presentó a jugar ──
+let absentSide = null; // null | 'home' | 'away'
 
 let buffetHome = [];
 let buffetAway  = [];
@@ -441,6 +465,7 @@ function init() {
     extraScores = { home: m.result?.extraHome ?? 0, away: m.result?.extraAway ?? 0 };
     extraSide = 'home';
     evalMode = m.evalMode || 'alternating';
+    absentSide = m.result?.absentSide || null;
     currentQ = 0; currentSide = 'home'; turnPhase = 'question';
     phase = 'finish';
 
@@ -460,6 +485,7 @@ function init() {
     turnPhase = p.turnPhase || 'question';
     extraScores = p.extraScores ? { ...p.extraScores } : { home: 0, away: 0 };
     extraSide = p.extraSide === 'away' ? 'away' : 'home';
+    absentSide = p.absentSide || null;
     phase = p.phase || (evalMode ? 'eval' : 'mode-select');
 
   } else {
@@ -468,6 +494,7 @@ function init() {
     evalMode = m.evalMode || null;
     currentQ = 0; currentSide = 'home'; turnPhase = 'question';
     extraScores = { home: 0, away: 0 }; extraSide = 'home';
+    absentSide = null;
     phase = evalMode ? 'eval' : 'mode-select';
   }
 
@@ -489,6 +516,7 @@ function persistProgress() {
     phase,
     extraScores: { ...extraScores },
     extraSide,
+    absentSide,
     turnData: turnData.map(td => ({
       home: { question: td.home.question, correct: td.home.correct },
       away: { question: td.away.question, correct: td.away.correct }
@@ -546,6 +574,15 @@ function renderModeSelect(t, m) {
       <div class="mode-card" data-action="choose-mode" data-mode="sequential">
         <span class="mode-card-title">➡️ Uno por uno</span>
         <span class="mode-card-sub">Uno responde todas sus preguntas primero y después el otro las suyas. Pueden hacerlo en momentos distintos: el progreso queda guardado.</span>
+      </div>
+
+      <div class="absent-block">
+        <span class="absent-label">¿Alguien no se presentó a jugar?</span>
+        <div class="absent-btn-row">
+          <button class="btn-absent" data-action="mark-absent" data-side="home">🚫 ${esc(m.home)} no asistió</button>
+          <button class="btn-absent" data-action="mark-absent" data-side="away">🚫 ${esc(m.away)} no asistió</button>
+        </div>
+        <span class="absent-hint">El ausente queda con 0 puntos y su participación en esta jornada se da por finalizada. El otro participante sigue respondiendo normalmente.</span>
       </div>
     </div>`;
 }
@@ -741,12 +778,12 @@ function renderEval(t, m) {
 
       <div class="scoreboard">
         <div class="player-col">
-          <div class="player-name">${esc(m.home)}</div>
+          <div class="player-name">${esc(m.home)}${absentSide === 'home' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</div>
           <div class="player-score" id="scoreHome">${hideRes ? '🔒' : totals.home}</div>
         </div>
         <div class="score-divider">—</div>
         <div class="player-col">
-          <div class="player-name">${esc(m.away)}</div>
+          <div class="player-name">${esc(m.away)}${absentSide === 'away' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</div>
           <div class="player-score" id="scoreAway">${hideRes ? '🔒' : totals.away}</div>
         </div>
       </div>
@@ -914,13 +951,15 @@ function renderFinish(t, m) {
   const summaryRows = turnData.map((td, i) => {
     const hOk = td.home.correct === true;
     const aOk = td.away.correct === true;
+    const hText = absentSide === 'home' ? 'Ausente' : (td.home.question?.pregunta || '—');
+    const aText = absentSide === 'away' ? 'Ausente' : (td.away.question?.pregunta || '—');
     return `<tr>
       <td style="color:var(--text-muted)">${i+1}</td>
-      <td style="font-size:.82rem">${esc(td.home.question?.pregunta || '—')}</td>
+      <td style="font-size:.82rem">${esc(hText)}</td>
       <td style="text-align:center">
         <button class="toggle-mark" data-action="toggle-mark" data-qi="${i}" data-side="home" title="Tocar para corregir">${hOk ? '✅' : '❌'}</button>
       </td>
-      <td style="font-size:.82rem">${esc(td.away.question?.pregunta || '—')}</td>
+      <td style="font-size:.82rem">${esc(aText)}</td>
       <td style="text-align:center">
         <button class="toggle-mark" data-action="toggle-mark" data-qi="${i}" data-side="away" title="Tocar para corregir">${aOk ? '✅' : '❌'}</button>
       </td>
@@ -938,13 +977,13 @@ function renderFinish(t, m) {
         <div class="finish-subtitle">${esc(m.home)} vs ${esc(m.away)}</div>
         <div class="final-scores">
           <div class="final-player ${isHome?'winner':''}">
-            <span class="fname">${esc(m.home)}</span>
+            <span class="fname">${esc(m.home)}${absentSide === 'home' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</span>
             <span class="fscore">${totals.home}</span>
             ${isHome?'<span class="winner-label">🏆 Ganador</span>':''}
           </div>
           <div class="final-sep">—</div>
           <div class="final-player ${isAway?'winner':''}">
-            <span class="fname">${esc(m.away)}</span>
+            <span class="fname">${esc(m.away)}${absentSide === 'away' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</span>
             <span class="fscore">${totals.away}</span>
             ${isAway?'<span class="winner-label">🏆 Ganador</span>':''}
           </div>
@@ -1011,7 +1050,34 @@ document.getElementById('app').addEventListener('click', e => {
 
   } else if (action === 'back-to-mode') {
     evalMode = null;
+    absentSide = null;
     phase = 'mode-select';
+    render();
+
+  } else if (action === 'mark-absent') {
+    const side = el.dataset.side === 'away' ? 'away' : 'home';
+    const t2 = getTournament(tid);
+    const m2 = t2?.rounds[roundIdx]?.[matchIdx];
+    if (!t2 || !m2) return;
+    const absentName = side === 'home' ? m2.home : m2.away;
+    if (!confirm(`¿Confirmás que ${absentName} no asistió? Va a quedar con 0 puntos y su participación en esta jornada se da por finalizada.`)) return;
+
+    const total2 = totalUnits(t2, m2);
+    const presentSide = side === 'home' ? 'away' : 'home';
+    turnData = Array.from({ length: total2 }, () => {
+      const td = emptyTurn();
+      td[side] = { question: null, correct: false }; // ausente: 0 puntos en todas sus preguntas
+      return td;
+    });
+    absentSide = side;
+    evalMode = 'sequential'; // solo el presente tiene que responder, uno por uno
+    extraScores = { home: 0, away: 0 };
+    extraSide = presentSide;
+    currentSide = presentSide;
+    currentQ = 0;
+    turnPhase = 'question';
+    phase = 'eval';
+    persistProgress();
     render();
 
   } else if (action === 'toggle-reveal') {
@@ -1079,8 +1145,17 @@ document.getElementById('app').addEventListener('click', e => {
 
   } else if (action === 're-eval') {
     stopCountdown();
-    currentQ = 0; currentSide = 'home'; turnPhase = 'question'; extraSide = 'home';
-    phase = evalMode === 'sequential' ? 'sequential-select' : 'eval';
+    currentQ = 0; turnPhase = 'question';
+    if (absentSide) {
+      // Uno de los dos no asistió: no tiene sentido volver a preguntar
+      // quién empieza, se va directo a las preguntas del presente.
+      const presentSide = absentSide === 'home' ? 'away' : 'home';
+      currentSide = presentSide; extraSide = presentSide;
+      phase = 'eval';
+    } else {
+      currentSide = 'home'; extraSide = 'home';
+      phase = evalMode === 'sequential' ? 'sequential-select' : 'eval';
+    }
     render();
 
   } else if (action === 'restart-match') {
@@ -1096,6 +1171,7 @@ document.getElementById('app').addEventListener('click', e => {
     evalMode = null;
     currentQ = 0; currentSide = 'home'; turnPhase = 'question';
     extraScores = { home: 0, away: 0 }; extraSide = 'home';
+    absentSide = null;
     phase = 'mode-select';
     if (t2 && m2) {
       delete m2.progress;
@@ -1201,6 +1277,7 @@ document.getElementById('app').addEventListener('click', e => {
       extraHome: extraScores.home || 0,
       extraAway: extraScores.away || 0,
       questionScores: cleanScores,
+      absentSide: absentSide || null,
       savedAt: Date.now()
     };
     if (evalMode) m.evalMode = evalMode;
