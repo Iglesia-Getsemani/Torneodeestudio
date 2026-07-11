@@ -33,7 +33,7 @@ function migrateLegacyFields(t) {
   return changed;
 }
 
-function loadAll() {
+export function loadAll() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const data = raw ? JSON.parse(raw) : [];
@@ -46,7 +46,7 @@ function loadAll() {
   }
 }
 
-function saveAll(tournaments) {
+export function saveAll(tournaments) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tournaments));
   } catch (e) {
@@ -54,11 +54,11 @@ function saveAll(tournaments) {
   }
 }
 
-function getTournament(id) {
+export function getTournament(id) {
   return loadAll().find(t => t.id === id) || null;
 }
 
-function saveTournament(updated) {
+export function saveTournament(updated) {
   const all = loadAll();
   const idx = all.findIndex(t => t.id === updated.id);
   if (idx >= 0) all[idx] = updated;
@@ -66,12 +66,12 @@ function saveTournament(updated) {
   saveAll(all);
 }
 
-function deleteTournament(id) {
+export function deleteTournament(id) {
   saveAll(loadAll().filter(t => t.id !== id));
 }
 
 // ---------- Round-robin (método del círculo) ----------
-function generateRounds(participants) {
+export function generateRounds(participants) {
   let list = [...participants];
   if (list.length % 2 !== 0) list.push(null); // null = bye
   const n = list.length;
@@ -105,7 +105,7 @@ function generateRounds(participants) {
  * que solo tenía un banco plano `questions`, devuelve ese banco como fallback
  * (comportamiento legado: mismas preguntas en todas las jornadas).
  */
-function sharedQuestionsForRound(t, roundIndex) {
+export function sharedQuestionsForRound(t, roundIndex) {
   if (t.questionsByRound && t.questionsByRound.length) {
     const entry = t.questionsByRound.find(r => r.round === roundIndex + 1);
     if (entry) return entry.questions || [];
@@ -119,7 +119,7 @@ function sharedQuestionsForRound(t, roundIndex) {
  * jornada, la rellena con el banco plano legado `t.questions` (si existe),
  * para no perder datos de torneos creados antes de este cambio.
  */
-function ensureQuestionsByRound(t) {
+export function ensureQuestionsByRound(t) {
   const existing = t.questionsByRound || [];
   return t.rounds.map((_, i) => {
     const found = existing.find(r => r.round === i + 1);
@@ -185,7 +185,7 @@ function askedQuestionTexts(t, participantName) {
  * "nuevas" de ese tema, y solo si no alcanzan para completar 3, rellena con
  * preguntas ya usadas (también elegidas al azar) para no dejar el tema corto.
  */
-function buffetTemasForParticipant(t, participantName) {
+export function buffetTemasForParticipant(t, participantName) {
   const Temas = (t.participantTemas && t.participantTemas[participantName]) || [];
   const bd = t.buffetData;
   if (!bd || !bd.Temas) return [];
@@ -215,7 +215,7 @@ function buffetTemasForParticipant(t, participantName) {
  * Compatibilidad: devuelve [{ text }] plano aplanando los temas.
  * 3 temas × 3 preguntas = 9 items.
  */
-function buffetItemsForParticipant(t, participantName) {
+export function buffetItemsForParticipant(t, participantName) {
   const grouped = buffetTemasForParticipant(t, participantName);
   const items = [];
   grouped.forEach(g => g.questions.forEach(q => items.push(q)));
@@ -223,7 +223,7 @@ function buffetItemsForParticipant(t, participantName) {
 }
 
 // ---------- Utilidad HTML ----------
-function esc(s) {
+export function esc(s) {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

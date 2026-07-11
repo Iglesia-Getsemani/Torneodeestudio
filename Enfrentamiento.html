@@ -336,8 +336,8 @@ body {
 <body>
 <div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase">Cargando…</p></div>
 
-<script src="storage.js"></script>
-<script>
+<script type="module">
+import { getTournament, saveTournament, esc, buffetTemasForParticipant, sharedQuestionsForRound } from './storage.js';
 
 // ── URL params ──
 const params    = new URLSearchParams(location.search);
