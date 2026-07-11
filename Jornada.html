@@ -198,7 +198,7 @@ function render() {
     document.getElementById('app').innerHTML = `
       <div class="page">
         <p class="error-state">No se encontró el torneo.</p>
-        <a class="back-link" href="OrganizadorTorneos.html">← Volver al organizador</a>
+        <a class="back-link" href="index.html">← Volver al organizador</a>
       </div>`;
     return;
   }
@@ -287,7 +287,7 @@ function render() {
 
   document.getElementById('app').innerHTML = `
     <div class="page">
-      <a class="back-link" href="OrganizadorTorneos.html?open=${encodeURIComponent(tid)}">← ${esc(t.name)}</a>
+      <a class="back-link" href="index.html?open=${encodeURIComponent(tid)}">← ${esc(t.name)}</a>
 
       <header class="page-header">
         <span class="eyebrow">${esc(t.name)}</span>

@@ -105,6 +105,19 @@ body {
 }
 .btn-import:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
 
+/* ── imagen épica de top 5 ── */
+.ranking-image-overlay {
+  position: fixed; inset: 0; background: rgba(10,15,12,.86);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999; padding: 24px;
+}
+.ranking-image-box { display: flex; flex-direction: column; align-items: center; gap: 16px; max-width: 92vw; }
+.ranking-image-box img {
+  max-width: 100%; max-height: 74vh; border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.55);
+}
+.ranking-image-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
 /* ── form ── */
 .form-block { display: flex; flex-direction: column; gap: 10px; }
 .form-block label {
@@ -448,6 +461,169 @@ function slugify(s) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'torneo';
 }
 
+// ── clasificación final (independiente del orden de columna elegido en pantalla) ──
+function computeRanking(t) {
+  const stat = {};
+  const bonus = t.bonusPoints || {};
+  t.participants.forEach(p => { stat[p] = { v: 0, e: 0, d: 0, pts: 0, score: 0 }; });
+
+  t.rounds.forEach(round => round.forEach(m => {
+    if (!m.result) return;
+    const { homeScore, awayScore } = m.result;
+    stat[m.home].score += homeScore;
+    stat[m.away].score += awayScore;
+    if (homeScore > awayScore) {
+      stat[m.home].v++; stat[m.away].d++;
+      stat[m.home].pts += 3;
+      stat[m.away].pts += awayScore >= 1 ? 1 : 0;
+    } else if (awayScore > homeScore) {
+      stat[m.away].v++; stat[m.home].d++;
+      stat[m.away].pts += 3;
+      stat[m.home].pts += homeScore >= 1 ? 1 : 0;
+    } else {
+      stat[m.home].e++; stat[m.away].e++;
+      const drawPts = homeScore >= 1 ? 2 : 0;
+      stat[m.home].pts += drawPts; stat[m.away].pts += drawPts;
+    }
+  }));
+
+  const total = p => stat[p].pts + (bonus[p] || 0);
+  const ranking = [...t.participants].sort((a, b) => total(b) - total(a) || stat[b].score - stat[a].score);
+  return { ranking, stat, bonus, total };
+}
+
+// ── jornadas completadas de forma contigua desde la primera (para el pie "hasta la jornada X de Y") ──
+function completedRoundsCount(t) {
+  let completed = 0;
+  for (const round of t.rounds) {
+    if (round.length > 0 && round.every(m => m.result)) completed++;
+    else break;
+  }
+  return completed;
+}
+
+// ── genera la imagen épica del Top 5 como PNG (data URL) ──
+async function generateTop5Image(t) {
+  const { ranking } = computeRanking(t);
+  const top5 = ranking.slice(0, 5);
+  const completed = completedRoundsCount(t);
+  const totalRounds = t.rounds.length;
+
+  try {
+    await Promise.all([
+      document.fonts.load('700 60px Oswald'),
+      document.fonts.load('600 44px Oswald'),
+      document.fonts.load('600 28px Oswald'),
+      document.fonts.load('500 30px Inter'),
+    ]);
+  } catch {}
+
+  const W = 1080, H = 1350;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // fondo degradado
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#22352A');
+  grad.addColorStop(1, '#0E1712');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // marcos dorados
+  ctx.strokeStyle = 'rgba(216,168,78,.55)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(36, 36, W - 72, H - 72);
+  ctx.strokeStyle = 'rgba(216,168,78,.22)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(52, 52, W - 104, H - 104);
+
+  ctx.textAlign = 'center';
+
+  // eyebrow
+  ctx.fillStyle = '#D8A84E';
+  ctx.font = '600 26px Oswald';
+  ctx.fillText('C L A S I F I C A C I Ó N', W / 2, 150);
+
+  // título del torneo (con wrap si es largo)
+  ctx.fillStyle = '#F1ECE0';
+  ctx.font = '700 52px Oswald';
+  drawWrappedText(ctx, String(t.name).toUpperCase(), W / 2, 225, W - 200, 58, 2);
+
+  // trofeo
+  ctx.font = '84px serif';
+  ctx.fillText('🏆', W / 2, 355);
+
+  // línea decorativa
+  ctx.strokeStyle = 'rgba(216,168,78,.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W / 2 - 90, 385); ctx.lineTo(W / 2 + 90, 385); ctx.stroke();
+
+  // top 5
+  const medals = ['🥇', '🥈', '🥉', '4º', '5º'];
+  const startY = 480;
+  const rowH = 145;
+  top5.forEach((name, i) => {
+    const y = startY + i * rowH;
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#D8A84E';
+    ctx.font = i < 3 ? '58px serif' : '700 44px Oswald';
+    ctx.fillText(medals[i], 90, y);
+
+    ctx.fillStyle = '#F1ECE0';
+    ctx.font = '600 42px Oswald';
+    const displayName = String(name).toUpperCase();
+    const fitted = fitTextToWidth(ctx, displayName, W - 300);
+    ctx.fillText(fitted, 210, y);
+
+    if (i < top5.length - 1) {
+      ctx.strokeStyle = 'rgba(216,168,78,.16)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(90, y + 42); ctx.lineTo(W - 90, y + 42); ctx.stroke();
+    }
+  });
+
+  // pie: jornada
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8FA293';
+  ctx.font = '500 30px Inter';
+  const footer = completed > 0
+    ? `Hasta la jornada ${completed} de ${totalRounds}`
+    : `${totalRounds} jornada${totalRounds === 1 ? '' : 's'} · aún sin comenzar`;
+  ctx.fillText(footer, W / 2, H - 80);
+
+  return { dataUrl: canvas.toDataURL('image/png'), filename: `${slugify(t.name)}-top5.png` };
+}
+
+// recorta el texto con "…" si no entra en el ancho disponible
+function fitTextToWidth(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) t = t.slice(0, -1);
+  return t + '…';
+}
+
+// dibuja texto centrado con salto de línea automático (hasta maxLines)
+function drawWrappedText(ctx, text, cx, y, maxWidth, lineHeight, maxLines) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = w;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  const shown = lines.slice(0, maxLines);
+  if (lines.length > maxLines) shown[maxLines - 1] = fitTextToWidth(ctx, shown[maxLines - 1], maxWidth);
+  shown.forEach((l, i) => ctx.fillText(l, cx, y + i * lineHeight));
+}
+
 // ── edición de contenido shared (por jornada) en un torneo YA CREADO ──
 let editSharedData = null;   // copia editable de questionsByRound mientras se edita
 let editSharedRound = null;  // jornada (1-based) seleccionada en la vista de edición
@@ -462,6 +638,10 @@ let sortBy = 'total';         // 'total' | 'pts' | 'score' | 'wins' | 'draws' | 
 // ── ocultar resultados (suspenso): tabla de posiciones y marcadores en vivo ──
 let draftHideResults = false;  // valor elegido al crear el torneo
 let standingsRevealed = false; // revelado temporal (por sesión) de la tabla de posiciones
+
+// ── imagen épica del Top 5 ──
+let rankingImageDataUrl = null;  // data URL del PNG generado (null = sin overlay abierto)
+let rankingImageFilename = 'top5.png';
 
 // ── abrir torneo directamente si llega ?open=ID (ej. al volver desde Jornada.html) ──
 const initParams = new URLSearchParams(location.search);
@@ -934,6 +1114,7 @@ function renderDetail() {
       <section>
         <h2 class="section-title">Clasificación <span style="font-size:.7rem;color:var(--text-muted);letter-spacing:0;text-transform:none;font-family:'Inter',sans-serif">· toca una columna para ordenar</span></h2>
         ${standingsBlock}
+        ${!standingsHidden ? `<button class="btn-secondary" data-action="generate-ranking-image" style="align-self:flex-start;margin-top:10px">🏆 Generar imagen del Top 5</button>` : ''}
       </section>
 
       <section>
@@ -943,7 +1124,17 @@ function renderDetail() {
           ${extraRoundCard}
         </div>
       </section>
-    </div>`;
+    </div>
+    ${rankingImageDataUrl ? `
+      <div class="ranking-image-overlay">
+        <div class="ranking-image-box">
+          <img src="${rankingImageDataUrl}" alt="Top 5 — ${esc(t.name)}">
+          <div class="ranking-image-actions">
+            <a class="btn-secondary" href="${rankingImageDataUrl}" download="${rankingImageFilename}">⬇ Descargar imagen</a>
+            <button class="btn-outline" data-action="close-ranking-image">Cerrar</button>
+          </div>
+        </div>
+      </div>` : ''}`;
 }
 
 function renderBuffetEdit() {
@@ -1160,10 +1351,10 @@ document.getElementById('app').addEventListener('click', e => {
     view = 'form'; render();
 
   } else if (action === 'home') {
-    view = 'home'; standingsRevealed = false; render();
+    view = 'home'; standingsRevealed = false; rankingImageDataUrl = null; render();
 
   } else if (action === 'open') {
-    activeTid = el.dataset.id; standingsRevealed = false; view = 'detail'; render();
+    activeTid = el.dataset.id; standingsRevealed = false; rankingImageDataUrl = null; view = 'detail'; render();
 
   } else if (action === 'delete') {
     if (!confirm('¿Eliminar este torneo?')) return;
@@ -1178,6 +1369,23 @@ document.getElementById('app').addEventListener('click', e => {
 
   } else if (action === 'import-tournament-open') {
     document.getElementById('importTournamentInput')?.click();
+
+  } else if (action === 'generate-ranking-image') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    if (t.hideResults && !standingsRevealed) {
+      alert('Los resultados están ocultos. Revelá la tabla antes de generar la imagen.');
+      return;
+    }
+    generateTop5Image(t).then(({ dataUrl, filename }) => {
+      rankingImageDataUrl = dataUrl;
+      rankingImageFilename = filename;
+      render();
+    });
+
+  } else if (action === 'close-ranking-image') {
+    rankingImageDataUrl = null;
+    render();
 
   } else if (action === 'mode-p') {
     syncDraftName(); inputMode = el.dataset.mode; render();
