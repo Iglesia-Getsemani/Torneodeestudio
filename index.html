@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organizador de Torneos</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg-deep: #13201A;
+  --bg-panel: #1D2D24;
+  --bg-panel-hover: #23362A;
+  --accent-gold: #D8A84E;
+  --accent-gold-dim: rgba(216,168,78,0.22);
+  --accent-red: #C75450;
+  --accent-green: #4EA87A;
+  --text-cream: #F1ECE0;
+  --text-muted: #8FA293;
+  --radius: 10px;
+}
+*, *::before, *::after { box-sizing: border-box; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg-deep);
+  color: var(--text-cream);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  padding: 32px 18px 80px;
+}
+#app { max-width: 680px; margin: 0 auto; }
+.page { display: flex; flex-direction: column; gap: 24px; }
+
+/* ── typography ── */
+.eyebrow {
+  display: block;
+  font-family: 'Oswald', sans-serif;
+  font-size: .72rem; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--accent-gold);
+  margin-bottom: 6px;
+}
+.page-header h1 {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 700; font-size: 2rem;
+  margin: 0; color: var(--text-cream);
+}
+.section-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: .9rem; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+/* ── back link ── */
+.back-link {
+  align-self: flex-start; background: none; border: none;
+  color: var(--text-muted); font-family: 'Inter', sans-serif;
+  font-size: .88rem; cursor: pointer; padding: 4px 0;
+}
+.back-link:hover { color: var(--accent-gold); }
+
+/* ── CTA ── */
+.cta-add {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 18px;
+  background: var(--bg-panel);
+  border: 1.5px dashed var(--accent-gold-dim); border-radius: 12px;
+  color: var(--accent-gold);
+  font-family: 'Oswald', sans-serif; font-size: 1.05rem;
+  letter-spacing: .03em; text-transform: uppercase;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.cta-add:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+.cta-add .plus { font-size: 1.4rem; line-height: 1; }
+
+/* ── tournament cards ── */
+.t-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.t-card { position: relative; background: var(--bg-panel); border: 1px solid var(--accent-gold-dim); border-radius: var(--radius); overflow: hidden; }
+.t-card-body { padding: 18px 66px 16px 18px; cursor: pointer; transition: background .15s; }
+.t-card-body:hover { background: var(--bg-panel-hover); }
+.t-card h3 { margin: 0 0 6px; font-family: 'Oswald', sans-serif; font-size: 1.15rem; font-weight: 600; }
+.t-card p { margin: 0; font-size: .85rem; color: var(--text-muted); }
+.t-card-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; }
+.t-card-icon-btn {
+  width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: transparent; color: var(--text-muted); font-size: 1rem;
+  line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.t-card-icon-btn:hover { background: var(--accent-gold-dim); color: var(--accent-gold); }
+.t-card-delete { font-size: 1.1rem; }
+.t-card-delete:hover { background: rgba(199,84,80,.18); color: var(--accent-red); }
+.empty-state { color: var(--text-muted); font-size: .92rem; }
+
+/* ── home: acciones (nuevo / importar) ── */
+.home-actions { display: flex; gap: 10px; }
+.home-actions .cta-add { flex: 1; }
+.btn-import {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 0 18px; background: var(--bg-panel);
+  border: 1.5px dashed var(--accent-gold-dim); border-radius: 12px;
+  color: var(--accent-gold); font-family: 'Oswald', sans-serif; font-size: .85rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer;
+  white-space: nowrap; transition: background .15s, border-color .15s;
+}
+.btn-import:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+
+/* ── form ── */
+.form-block { display: flex; flex-direction: column; gap: 10px; }
+.form-block label {
+  font-family: 'Oswald', sans-serif; font-size: .8rem;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted);
+}
+.form-block input[type=text], .form-block textarea {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: 8px; padding: 12px 14px;
+  color: var(--text-cream); font-family: 'Inter', sans-serif; font-size: .95rem;
+  outline: none; width: 100%;
+}
+.form-block input[type=text]:focus, .form-block textarea:focus { border-color: var(--accent-gold); }
+.form-block textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+.row-input { display: flex; gap: 8px; }
+.row-input input { flex: 1; }
+
+/* ── chips ── */
+.chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: 999px; padding: 5px 8px 5px 14px; font-size: .86rem;
+}
+.chip.question-chip { border-color: rgba(78,168,122,.35); }
+.chip button { background: none; border: none; color: var(--text-muted); font-size: 1rem; cursor: pointer; line-height: 1; padding: 2px 4px; }
+.chip button:hover { color: var(--accent-red); }
+.hint { margin: 0; font-size: .8rem; color: var(--text-muted); }
+
+/* ── ocultar resultados toggle ── */
+.hide-results-toggle {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: 8px; padding: 12px 14px; font-size: .92rem;
+}
+.hide-results-toggle:hover { border-color: var(--accent-gold); }
+.hide-results-toggle input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent-gold); }
+.hidden-results-panel {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--bg-panel); border: 1px dashed var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 32px 18px; text-align: center;
+}
+.hidden-results-panel .lock-icon { font-size: 2rem; }
+.hidden-results-panel .lock-text { color: var(--text-muted); font-size: .9rem; }
+
+/* ── tabs ── */
+.tabs { display: flex; border: 1px solid var(--accent-gold-dim); border-radius: 8px; overflow: hidden; }
+.tab {
+  flex: 1; padding: 8px 12px; background: var(--bg-panel); border: none;
+  color: var(--text-muted); font-family: 'Oswald', sans-serif;
+  font-size: .78rem; letter-spacing: .06em; text-transform: uppercase;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.tab:not(:last-child) { border-right: 1px solid var(--accent-gold-dim); }
+.tab.active { background: var(--accent-gold-dim); color: var(--accent-gold); }
+.tab:hover:not(.active) { background: var(--bg-panel-hover); }
+
+.import-area { display: none; flex-direction: column; gap: 8px; }
+.import-area.visible { display: flex; }
+.import-feedback { font-size: .8rem; padding: 6px 10px; border-radius: 6px; display: none; }
+.import-feedback.ok { display: block; background: rgba(216,168,78,.12); color: var(--accent-gold); }
+.import-feedback.err { display: block; background: rgba(199,84,80,.14); color: var(--accent-red); }
+
+/* ── buttons ── */
+.btn-primary {
+  width: 100%; padding: 16px; border: none; border-radius: var(--radius);
+  background: var(--accent-gold); color: #1A1409;
+  font-family: 'Oswald', sans-serif; font-size: 1rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer;
+  transition: filter .15s;
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-primary:disabled { background: var(--bg-panel-hover); color: var(--text-muted); cursor: not-allowed; filter: none; }
+.btn-secondary {
+  background: var(--bg-panel-hover); border: 1px solid var(--accent-gold-dim);
+  color: var(--accent-gold); border-radius: 8px; padding: 0 18px;
+  font-family: 'Oswald', sans-serif; font-size: .85rem;
+  letter-spacing: .03em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap; height: 46px;
+}
+.btn-secondary:hover { border-color: var(--accent-gold); }
+
+/* ── detail: jornadas ── */
+.jornada-list { display: flex; flex-direction: column; gap: 12px; }
+.jornada-card {
+  position: relative; display: flex; align-items: center; gap: 18px;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 16px 22px; cursor: pointer;
+  transition: background .15s, border-color .15s; overflow: hidden;
+}
+.jornada-card:hover { background: var(--bg-panel-hover); border-color: var(--accent-gold); }
+.jornada-card::before, .jornada-card::after {
+  content: ""; position: absolute; width: 16px; height: 16px;
+  background: var(--bg-deep); border-radius: 50%;
+  top: 50%; transform: translateY(-50%);
+}
+.jornada-card::before { left: -8px; }
+.jornada-card::after { right: -8px; }
+.jornada-num-block {
+  display: flex; flex-direction: column; align-items: center;
+  padding-right: 18px; border-right: 2px dashed var(--accent-gold-dim); min-width: 64px;
+}
+.jornada-label { font-family: 'Oswald', sans-serif; font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; color: var(--text-muted); }
+.jornada-number { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 2rem; line-height: 1; color: var(--accent-gold); }
+.jornada-meta { flex: 1; display: flex; align-items: center; justify-content: space-between; font-size: .9rem; }
+.jornada-meta .chevron { color: var(--accent-gold); }
+.badge-done { font-size: .72rem; background: rgba(78,168,122,.2); color: var(--accent-green); border-radius: 999px; padding: 2px 8px; }
+.badge-pending { font-size: .72rem; background: rgba(216,168,78,.15); color: var(--accent-gold); border-radius: 999px; padding: 2px 8px; }
+
+/* ── standings table ── */
+.standings-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.standings-table th {
+  font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--accent-gold-dim);
+  cursor: pointer; user-select: none; white-space: nowrap;
+  transition: color .15s;
+}
+.standings-table th:first-child { text-align: center; }
+.standings-table th:nth-child(2) { text-align: left; cursor: default; }
+.standings-table th.sort-active { color: var(--accent-gold); }
+.standings-table th .sort-arrow { font-size: .65rem; margin-left: 3px; opacity: .7; }
+.standings-table td { padding: 10px 10px; border-bottom: 1px solid rgba(216,168,78,.08); text-align: center; }
+.standings-table td:nth-child(2) { text-align: left; }
+.standings-table tr:last-child td { border-bottom: none; }
+.standings-table .rank { font-family: 'Oswald', sans-serif; font-weight: 700; color: var(--accent-gold); font-size: 1.1rem; }
+.standings-table .pts { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 1rem; color: var(--text-cream); }
+.standings-table .sort-col { background: rgba(216,168,78,.06); }
+
+.divider { border: none; border-top: 1px solid var(--accent-gold-dim); margin: 0; }
+
+/* ── bonus: puntos extra ── */
+.bonus-player-card {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: var(--radius); padding: 28px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center;
+}
+.bonus-player-name { font-family: 'Oswald', sans-serif; font-size: 1.5rem; font-weight: 700; }
+.bonus-score-display {
+  font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 4rem; line-height: 1;
+  color: var(--accent-gold); transition: transform .15s;
+}
+.bonus-score-display.bump { transform: scale(1.18); }
+.bonus-score-btns { display: flex; gap: 12px; }
+.bonus-btn {
+  width: 52px; height: 52px; border-radius: 10px; border: none;
+  font-family: 'Oswald', sans-serif; font-size: 1.6rem; font-weight: 700;
+  cursor: pointer; transition: filter .12s, transform .1s;
+  display: flex; align-items: center; justify-content: center;
+}
+.bonus-btn:active { transform: scale(.92); }
+.bonus-btn.minus { background: rgba(199,84,80,.18); color: var(--accent-red); }
+.bonus-btn.minus:hover { filter: brightness(1.3); }
+.bonus-btn.plus  { background: rgba(78,168,122,.18); color: var(--accent-green); }
+.bonus-btn.plus:hover  { filter: brightness(1.3); }
+.bonus-custom-row { display: flex; gap: 8px; width: 100%; max-width: 220px; }
+.bonus-custom-row input {
+  flex: 1; background: var(--bg-deep); border: 1px solid var(--accent-gold-dim);
+  border-radius: 6px; padding: 8px 12px; color: var(--text-cream);
+  font-family: 'Inter', sans-serif; font-size: .95rem; outline: none; text-align: center;
+}
+.bonus-custom-row input:focus { border-color: var(--accent-gold); }
+.bonus-custom-row button {
+  background: var(--accent-gold-dim); border: 1px solid var(--accent-gold-dim);
+  color: var(--accent-gold); border-radius: 6px; padding: 0 14px;
+  font-family: 'Oswald', sans-serif; font-size: .82rem; text-transform: uppercase; cursor: pointer;
+}
+.bonus-custom-row button:hover { background: var(--accent-gold); color: #1A1409; }
+.bonus-counter { font-family: 'Oswald', sans-serif; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.bonus-nav { display: flex; gap: 12px; }
+.btn-bonus-nav {
+  flex: 1; padding: 14px; border: none; border-radius: var(--radius);
+  font-family: 'Oswald', sans-serif; font-size: .9rem;
+  letter-spacing: .04em; text-transform: uppercase; cursor: pointer; transition: filter .15s;
+}
+.btn-bonus-nav.secondary { background: var(--bg-panel); border: 1px solid var(--accent-gold-dim); color: var(--accent-gold); }
+.btn-bonus-nav.secondary:hover { background: var(--bg-panel-hover); }
+.btn-bonus-nav.primary { background: var(--accent-gold); color: #1A1409; }
+.btn-bonus-nav.primary:hover { filter: brightness(1.08); }
+.btn-bonus-nav:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+.bonus-dots { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.bonus-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim); cursor: pointer;
+}
+.bonus-dot.done { background: var(--accent-green); border-color: var(--accent-green); }
+.bonus-dot.current { border-color: var(--accent-gold); background: var(--accent-gold-dim); }
+.btn-bonus-trigger {
+  width: 100%; padding: 14px; border: 1px solid var(--accent-gold-dim); border-radius: var(--radius);
+  background: var(--bg-panel); color: var(--accent-gold);
+  font-family: 'Oswald', sans-serif; font-size: .88rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer; transition: background .15s;
+}
+.btn-bonus-trigger:hover { background: var(--bg-panel-hover); }
+
+/* ── selector de participante para contenido individual ── */
+.p-select-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: 999px; padding: 6px 14px; font-size: .85rem;
+  cursor: pointer; color: var(--text-cream); transition: background .15s, border-color .15s;
+}
+.p-select-chip:hover { background: var(--bg-panel-hover); }
+.p-select-chip.active { border-color: var(--accent-gold); background: var(--accent-gold-dim); color: var(--accent-gold); }
+.p-select-chip .count { font-size: .72rem; color: var(--text-muted); }
+.p-select-chip.active .count { color: var(--accent-gold); }
+.p-select-chip.empty:not(.active) { border-color: rgba(199,84,80,.4); }
+.pcontent-editor {
+  margin-top: 8px; padding: 14px; background: var(--bg-panel);
+  border: 1px solid var(--accent-gold-dim); border-radius: 8px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pcontent-editor-label { font-size: .85rem; color: var(--accent-gold); font-family: 'Oswald', sans-serif; letter-spacing: .03em; }
+
+/* ── edición de contenido buffet en un torneo ya creado ── */
+.buffet-q-list { display: flex; flex-direction: column; gap: 14px; }
+.buffet-q-editor {
+  background: var(--bg-panel); border: 1px solid var(--accent-gold-dim);
+  border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;
+}
+.buffet-q-num { font-family: 'Oswald', sans-serif; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-gold); }
+.buffet-field-label { font-family: 'Oswald', sans-serif; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin-top: 4px; }
+.buffet-field {
+  background: var(--bg-deep); border: 1px solid var(--accent-gold-dim); border-radius: 6px;
+  padding: 8px 10px; color: var(--text-cream); font-family: 'Inter', sans-serif; font-size: .9rem;
+  outline: none; width: 100%; resize: vertical; line-height: 1.4; box-sizing: border-box;
+}
+.buffet-field:focus { border-color: var(--accent-gold); }
+.buffet-q-rm {
+  align-self: flex-start; background: none; border: none; color: var(--accent-red);
+  font-size: .78rem; cursor: pointer; padding: 4px 0; text-decoration: underline;
+}
+.btn-outline {
+  width: 100%; padding: 14px; border: 1px solid var(--accent-gold-dim); border-radius: var(--radius);
+  background: none; color: var(--accent-gold);
+  font-family: 'Oswald', sans-serif; font-size: .9rem;
+  letter-spacing: .03em; text-transform: uppercase; cursor: pointer;
+}
+.btn-outline:hover { background: var(--bg-panel-hover); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { loadAll, saveAll, getTournament, saveTournament, deleteTournament as dbDelete, generateRounds, esc, ensureQuestionsByRound } from './storage.js';
+
+// ── state ──
+let view = 'home';          // home | form | detail | bonus
+let activeTid = null;
+let draftName = '';
+let draftParticipants = [];
+let draftQuestions = [];    // [{ text }]  — legado, ya no se usa para crear (se mantiene para no romper nada)
+let inputMode = 'manual';   // manual | json
+let questionInputMode = 'manual';
+
+// ── shared por jornada: consola de fechas (como buffet, pero atada a las jornadas del torneo) ──
+let draftQuestionsByRound = {};  // { [roundNum]: [{ text }] } — usado cuando contentType === 'shared'
+let sharedEditingRound = null;   // jornada (1-based) que se está editando en la consola
+
+let contentType = 'shared';        // 'shared' | 'individual' | 'buffet'
+let draftParticipantContent = {};  // { [participante]: [{ text }] } — usado cuando contentType === 'individual'
+let editingParticipant = null;     // participante que se está editando en modo individual
+let pcInputMode = 'manual';        // manual | bulk
+
+// ── buffet state ──
+let draftBuffetData = null;             // JSON parseado { Temas: [...] }
+let draftParticipantTemas = {};          // { [participante]: [TemaNum, ...] }
+let buffetAssigningParticipant = null;  // participante cuyos temas se están editando
+
+// ── edición de contenido buffet en un torneo YA CREADO ──
+let editBuffetData = null;   // copia editable de t.buffetData mientras se edita
+let editBuffetTema = null;    // tema seleccionado (number o texto) en la vista de edición
+
+// ── utilidades: pegar varias preguntas de una vez en formato { pregunta, respuesta, justificacion } ──
+function parseQuestionsPaste(raw) {
+  let text = raw.trim();
+  let arr = null;
+
+  // 1) intento directo, por si ya viene con los corchetes [ ... ]
+  try { arr = JSON.parse(text); } catch {}
+
+  // 2) si falla, asumimos que son uno o varios objetos { ... } separados por coma sin corchetes
+  if (arr === null) {
+    let wrapped = text;
+    if (!wrapped.trimStart().startsWith('[')) wrapped = '[' + wrapped;
+    if (!wrapped.trimEnd().endsWith(']')) wrapped = wrapped + ']';
+    wrapped = wrapped.replace(/,\s*\]\s*$/, ']'); // saca coma colgante antes del cierre
+    try { arr = JSON.parse(wrapped); } catch { arr = null; }
+  }
+
+  if (arr === null) return null;
+  if (!Array.isArray(arr)) arr = [arr];
+
+  const out = arr
+    .filter(q => q && typeof q === 'object')
+    .map(q => ({
+      pregunta: String(q.pregunta ?? '').trim(),
+      respuesta: String(q.respuesta ?? '').trim(),
+      justificacion: String(q.justificacion ?? '').trim()
+    }))
+    .filter(q => q.pregunta && q.respuesta);
+
+  return out.length ? out : null;
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch {}
+  document.body.removeChild(ta);
+}
+
+function downloadJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function slugify(s) {
+  return String(s || 'torneo')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'torneo';
+}
+
+// ── edición de contenido shared (por jornada) en un torneo YA CREADO ──
+let editSharedData = null;   // copia editable de questionsByRound mientras se edita
+let editSharedRound = null;  // jornada (1-based) seleccionada en la vista de edición
+
+// ── bonus: puntos extra al final del torneo ──
+let bonusIdx = 0;             // índice del participante actual en la fase bonus
+let bonusScores = {};         // { [nombre]: número } — acumula durante la sesión
+
+// ── ordenamiento de tabla de clasificación ──
+let sortBy = 'total';         // 'total' | 'pts' | 'score' | 'wins' | 'draws' | 'bonus'
+
+// ── ocultar resultados (suspenso): tabla de posiciones y marcadores en vivo ──
+let draftHideResults = false;  // valor elegido al crear el torneo
+let standingsRevealed = false; // revelado temporal (por sesión) de la tabla de posiciones
+
+// ── abrir torneo directamente si llega ?open=ID (ej. al volver desde Jornada.html) ──
+const initParams = new URLSearchParams(location.search);
+const openId = initParams.get('open');
+if (openId) { activeTid = openId; view = 'detail'; }
+
+// ── helpers ──
+function sharedContentSummary(t) {
+  if (t.questionsByRound && t.questionsByRound.length) {
+    const totalQ = t.questionsByRound.reduce((s, r) => s + (r.questions?.length || 0), 0);
+    return `${totalQ} pregunta${totalQ===1?'':'s'} · ${t.questionsByRound.length} jornada${t.questionsByRound.length===1?'':'s'} con contenido propio`;
+  }
+  return `${t.questions.length} pregunta${t.questions.length===1?'':'s'}`;
+}
+
+function syncDraftName() {
+  const el = document.getElementById('tournamentNameInput');
+  if (el) draftName = el.value;
+}
+
+// ── renders ──
+function render() {
+  if (view === 'home') renderHome();
+  else if (view === 'form') renderForm();
+  else if (view === 'detail') renderDetail();
+  else if (view === 'bonus') renderBonus();
+  else if (view === 'buffet-edit') renderBuffetEdit();
+  else if (view === 'shared-edit') renderSharedEdit();
+}
+
+function renderHome() {
+  const tournaments = loadAll();
+  const cards = tournaments.map(t => `
+    <div class="t-card">
+      <div class="t-card-actions">
+        <button class="t-card-icon-btn" data-action="export-tournament" data-id="${t.id}" title="Exportar como JSON">⬇</button>
+        <button class="t-card-icon-btn t-card-delete" data-action="delete" data-id="${t.id}" title="Eliminar">×</button>
+      </div>
+      <div class="t-card-body" data-action="open" data-id="${t.id}">
+        <h3>${esc(t.name)}</h3>
+        <p>${t.participants.length} participantes · ${t.rounds.length} jornada${t.rounds.length===1?'':'s'} · ${t.contentType === 'individual' ? 'contenido individual' : t.contentType === 'buffet' ? `buffet ${(t.buffetData?.Temas||[]).length} temas` : sharedContentSummary(t)}</p>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <header class="page-header">
+        <span class="eyebrow">Organizador</span>
+        <h1>Torneos</h1>
+      </header>
+      <div class="home-actions">
+        <button class="cta-add" data-action="new"><span class="plus">+</span><span>Nuevo torneo</span></button>
+        <button class="btn-import" data-action="import-tournament-open" title="Importar torneo desde un archivo JSON">⬆ Importar</button>
+      </div>
+      <input type="file" id="importTournamentInput" accept="application/json" style="display:none">
+      <section>
+        <h2 class="section-title">Tus torneos</h2>
+        ${tournaments.length === 0
+          ? '<p class="empty-state">Aún no tienes torneos. Crea el primero arriba, o importa uno desde un archivo JSON.</p>'
+          : `<div class="t-grid">${cards}</div>`}
+      </section>
+    </div>`;
+}
+
+function renderForm() {
+  const chips = draftParticipants.map((p, i) => `
+    <span class="chip">
+      ${esc(p)}
+      <button data-action="rm-participant" data-index="${i}">×</button>
+    </span>`).join('');
+
+  // ── shared: cuántas jornadas tendrá el torneo, calculadas en vivo a partir de los participantes ──
+  const previewRounds = draftParticipants.length >= 2 ? generateRounds(draftParticipants) : [];
+  const previewRoundsCount = previewRounds.length;
+  if (contentType === 'shared') {
+    if (previewRoundsCount > 0 && (!sharedEditingRound || sharedEditingRound > previewRoundsCount)) sharedEditingRound = 1;
+    if (previewRoundsCount === 0) sharedEditingRound = null;
+  }
+
+  const canCreate = draftParticipants.length >= 2 && (
+    contentType === 'shared'
+      ? previewRoundsCount > 0 && Array.from({length: previewRoundsCount}, (_,i) => i+1)
+          .every(r => (draftQuestionsByRound[r] || []).length >= 1)
+      : contentType === 'individual'
+        ? draftParticipants.every(p => (draftParticipantContent[p] || []).length >= 1)
+        : contentType === 'buffet'
+          ? !!draftBuffetData && draftParticipants.every(p => (draftParticipantTemas[p] || []).length >= 1)
+          : false
+  );
+
+  let contentBlockHtml;
+  if (contentType === 'shared') {
+    // ── Consola de jornadas: cada fecha tiene su propio contenido, igual que buffet pero atado a las jornadas del torneo ──
+    const roundChips = Array.from({length: previewRoundsCount}, (_, i) => i+1).map(r => {
+      const count = (draftQuestionsByRound[r] || []).length;
+      const active = sharedEditingRound === r;
+      return `<button class="p-select-chip ${active?'active':''} ${count===0?'empty':''}" data-action="shared-select-round" data-round="${r}">Jornada ${r} <span class="count">${count}</span></button>`;
+    }).join('');
+
+    let roundEditorHtml = '';
+    if (sharedEditingRound && previewRoundsCount > 0) {
+      const items = draftQuestionsByRound[sharedEditingRound] || [];
+      const rqchips = items.map((q, i) => `
+        <span class="chip question-chip">
+          ${esc(q.text.length > 55 ? q.text.slice(0,55)+'…' : q.text)}
+          <button data-action="rm-question" data-round="${sharedEditingRound}" data-index="${i}">×</button>
+        </span>`).join('');
+
+      roundEditorHtml = `
+        <div class="pcontent-editor">
+          <span class="pcontent-editor-label">Preguntas de la Jornada ${sharedEditingRound}</span>
+          <div class="tabs">
+            <button class="tab ${questionInputMode==='manual'?'active':''}" data-action="mode-q" data-mode="manual">✏️ Una por una</button>
+            <button class="tab ${questionInputMode==='bulk'?'active':''}" data-action="mode-q" data-mode="bulk">📋 Varias a la vez</button>
+          </div>
+          <div id="qManual" style="display:${questionInputMode==='manual'?'flex':'none'};gap:8px">
+            <input id="questionInput" type="text" placeholder="Pregunta para la Jornada ${sharedEditingRound}…" style="flex:1">
+            <button class="btn-secondary" data-action="add-question">Agregar</button>
+          </div>
+          <div id="qBulk" class="import-area ${questionInputMode==='bulk'?'visible':''}">
+            <textarea id="qBulkInput" placeholder="Una pregunta por línea:&#10;¿Cuál es la capital de Francia?&#10;¿En qué año fue la Revolución Francesa?"></textarea>
+            <button class="btn-secondary" data-action="import-questions">Importar preguntas</button>
+            <p id="qFeedback" class="import-feedback"></p>
+          </div>
+          <div class="chip-list">${rqchips || '<p class="hint">Sin preguntas aún para esta jornada.</p>'}</div>
+        </div>`;
+    }
+
+    contentBlockHtml = `
+      <!-- Preguntas por jornada (consola de fechas) -->
+      <div class="form-block">
+        <label>Contenido por jornada</label>
+        ${previewRoundsCount === 0
+          ? '<p class="hint">Agrega al menos 2 participantes para ver las jornadas del torneo.</p>'
+          : `
+            <div class="chip-list">${roundChips}</div>
+            <p class="hint">Toca una jornada para definir sus propias preguntas. Cada jornada necesita al menos 1.</p>
+            ${roundEditorHtml}
+          `}
+      </div>`;
+  } else if (contentType === 'individual') {
+    contentBlockHtml = `
+      <!-- Contenido individual por participante -->
+      <div class="form-block">
+        <label>Contenido por participante</label>
+        ${draftParticipants.length === 0
+          ? '<p class="hint">Agrega participantes primero para asignarles su contenido.</p>'
+          : `
+            <div class="chip-list">
+              ${draftParticipants.map(p => {
+                const count = (draftParticipantContent[p] || []).length;
+                const active = editingParticipant === p;
+                return `<button class="p-select-chip ${active?'active':''} ${count===0?'empty':''}" data-action="edit-pcontent" data-name="${esc(p)}">${esc(p)} <span class="count">${count}</span></button>`;
+              }).join('')}
+            </div>
+            <p class="hint">Toca un participante para agregar o ver su contenido. Cada uno necesita al menos 1 elemento.</p>
+            ${editingParticipant && draftParticipants.includes(editingParticipant) ? renderParticipantContentEditor(editingParticipant) : ''}
+          `}
+      </div>`;
+  } else {
+    // ── Buffet mode ──
+    const bd = draftBuffetData;
+    const availTemas = bd ? bd.Temas.map(d => d.Tema) : [];
+    const TemaChips = availTemas.map(d => `<span class="chip question-chip">Tema ${d} <span style="color:var(--text-muted);font-size:.72rem">(${(bd.Temas.find(x=>x.Tema===d)?.preguntas||[]).length}p)</span></span>`).join('');
+
+    const participantChips = draftParticipants.map(p => {
+      const assigned = draftParticipantTemas[p] || [];
+      const active = buffetAssigningParticipant === p;
+      return `<button class="p-select-chip ${active?'active':''} ${assigned.length===0?'empty':''}" data-action="buffet-assign" data-name="${esc(p)}">${esc(p)} <span class="count">${assigned.length} tema${assigned.length!==1?'s':''}</span></button>`;
+    }).join('');
+
+    let assignHtml = '';
+    if (buffetAssigningParticipant && draftParticipants.includes(buffetAssigningParticipant) && bd) {
+      const assigned = draftParticipantTemas[buffetAssigningParticipant] || [];
+      const TemaToggles = availTemas.map(d => {
+        const on = assigned.some(x => String(x) === String(d));
+        const qCount = (bd.Temas.find(x=>x.Tema===d)?.preguntas||[]).length;
+        return `<button class="p-select-chip ${on?'active':''}" data-action="toggle-Tema" data-tema="${d}" data-name="${esc(buffetAssigningParticipant)}">Tema ${d} <span class="count">${qCount}p</span></button>`;
+      }).join('');
+      assignHtml = `
+        <div class="pcontent-editor">
+          <span class="pcontent-editor-label">Temas de: ${esc(buffetAssigningParticipant)}</span>
+          <div class="chip-list">${TemaToggles}</div>
+          <p class="hint">${assigned.length} tema${assigned.length!==1?'s':''} asignado${assigned.length!==1?'s':''} · ${assigned.reduce((s,d)=>{ const Tema=bd.Temas.find(x=>x.Tema===d); return s+(Tema?Tema.preguntas.length:0); },0)} preguntas en total</p>
+          <div style="display:flex;gap:8px">
+            <button class="btn-secondary" data-action="buffet-auto" data-name="${esc(buffetAssigningParticipant)}" style="height:38px;font-size:.78rem">🎲 Auto-asignar</button>
+          </div>
+        </div>`;
+    }
+
+    contentBlockHtml = `
+      <!-- Buffet: carga JSON y asigna temas -->
+      <div class="form-block">
+        <label>Contenido buffet (JSON)</label>
+        <div id="buffetUpload" style="display:${draftBuffetData?'none':'flex'};flex-direction:column;gap:8px">
+          <input id="buffetFileInput" type="file" accept=".json" style="color:var(--text-muted);font-size:.88rem">
+          <p class="hint">Sube un archivo JSON con estructura: { "Temas": [{ "Tema": 1, "preguntas": [...] }] }</p>
+        </div>
+        ${bd ? `
+          <div style="background:var(--bg-panel);border:1px solid var(--accent-gold-dim);border-radius:8px;padding:12px 14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span style="font-size:.88rem;color:var(--accent-gold)">✅ ${bd.Temas.length} temas cargados</span>
+              <button class="btn-secondary" data-action="buffet-clear" style="height:32px;font-size:.72rem;padding:0 10px">Cambiar JSON</button>
+            </div>
+            <div class="chip-list">${TemaChips}</div>
+          </div>
+        ` : ''}
+      </div>
+
+      ${bd && draftParticipants.length > 0 ? `
+      <div class="form-block">
+        <label>Asignar temas a participantes</label>
+        <div class="chip-list">${participantChips}</div>
+        <p class="hint">Toca un participante para asignarle temas. Pueden compartir temas.</p>
+        ${assignHtml}
+        <button class="btn-secondary" data-action="buffet-auto-all" style="height:42px">🎲 Auto-asignar a todos</button>
+      </div>` : ''}`;
+  }
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <button class="back-link" data-action="home">← Torneos</button>
+      <header class="page-header">
+        <span class="eyebrow">Nuevo</span><h1>Crear torneo</h1>
+      </header>
+
+      <!-- Nombre -->
+      <div class="form-block">
+        <label for="tournamentNameInput">Nombre del torneo</label>
+        <input id="tournamentNameInput" type="text" placeholder="Ej. Evaluación de Historia" value="${esc(draftName)}">
+      </div>
+
+      <!-- Participantes -->
+      <div class="form-block">
+        <label>Participantes</label>
+        <div class="tabs">
+          <button class="tab ${inputMode==='manual'?'active':''}" data-action="mode-p" data-mode="manual">✏️ Uno por uno</button>
+          <button class="tab ${inputMode==='json'?'active':''}" data-action="mode-p" data-mode="json">📋 Importar lista</button>
+        </div>
+        <div id="pManual" style="display:${inputMode==='manual'?'flex':'none'};gap:8px">
+          <input id="participantInput" type="text" placeholder="Nombre del participante" style="flex:1">
+          <button class="btn-secondary" data-action="add-participant">Agregar</button>
+        </div>
+        <div id="pJson" class="import-area ${inputMode==='json'?'visible':''}">
+          <textarea id="pJsonInput" placeholder='["Ana","Pedro","Luis"] o una línea por nombre'></textarea>
+          <button class="btn-secondary" data-action="import-participants">Importar</button>
+          <p id="pFeedback" class="import-feedback"></p>
+        </div>
+        <div class="chip-list">${chips || '<p class="hint">Sin participantes aún.</p>'}</div>
+        <p class="hint">${draftParticipants.length} participante${draftParticipants.length===1?'':'s'}${draftParticipants.length<2?' · mínimo 2':''}</p>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Tipo de contenido -->
+      <div class="form-block">
+        <label>Tipo de contenido</label>
+        <div class="tabs">
+          <button class="tab ${contentType==='shared'?'active':''}" data-action="content-type" data-type="shared">🌐 Mismo para todos</button>
+          <button class="tab ${contentType==='individual'?'active':''}" data-action="content-type" data-type="individual">👤 Propio por participante</button>
+          <button class="tab ${contentType==='buffet'?'active':''}" data-action="content-type" data-type="buffet">🍽️ Buffet por temas</button>
+        </div>
+        <p class="hint">${contentType==='shared'
+          ? 'Todos los participantes responden las mismas preguntas, pero podés definir un contenido distinto para cada jornada.'
+          : contentType==='individual'
+            ? 'Cada participante presenta su propio contenido; en el enfrentamiento cada uno se evalúa con su propio material.'
+            : 'Carga un JSON con temas de estudio y asigna temas específicos a cada participante. Pueden compartir temas.'}</p>
+      </div>
+
+      ${contentBlockHtml}
+
+      <hr class="divider">
+
+      <div class="form-block">
+        <label class="hide-results-toggle" data-action="toggle-hide-results-draft">
+          <input type="checkbox" ${draftHideResults ? 'checked' : ''} style="pointer-events:none">
+          <span>🔒 Ocultar resultados durante el juego</span>
+        </label>
+        <p class="hint">La tabla de posiciones y los marcadores en vivo quedan ocultos (con opción de revelarlos manualmente). Podés cambiar esto después.</p>
+      </div>
+
+      <button class="btn-primary" data-action="create" ${canCreate?'':'disabled'}>
+        Crear torneo y generar jornadas
+      </button>
+    </div>`;
+
+  if (inputMode === 'manual' && contentType==='shared') document.getElementById('participantInput')?.focus();
+}
+
+function renderParticipantContentEditor(name) {
+  const items = draftParticipantContent[name] || [];
+  const ichips = items.map((q, i) => `
+    <span class="chip question-chip">
+      ${esc(q.text.length > 55 ? q.text.slice(0,55)+'…' : q.text)}
+      <button data-action="rm-pcontent" data-name="${esc(name)}" data-index="${i}">×</button>
+    </span>`).join('');
+
+  return `
+    <div class="pcontent-editor">
+      <span class="pcontent-editor-label">Editando contenido de: ${esc(name)}</span>
+      <div class="tabs">
+        <button class="tab ${pcInputMode==='manual'?'active':''}" data-action="pc-mode" data-mode="manual">✏️ Uno por uno</button>
+        <button class="tab ${pcInputMode==='bulk'?'active':''}" data-action="pc-mode" data-mode="bulk">📋 Varios a la vez</button>
+      </div>
+      <div style="display:${pcInputMode==='manual'?'flex':'none'};gap:8px">
+        <input id="pcInput" type="text" placeholder="Contenido o pregunta para ${esc(name)}…" style="flex:1">
+        <button class="btn-secondary" data-action="add-pcontent" data-name="${esc(name)}">Agregar</button>
+      </div>
+      <div class="import-area ${pcInputMode==='bulk'?'visible':''}">
+        <textarea id="pcBulkInput" placeholder="Un elemento por línea"></textarea>
+        <button class="btn-secondary" data-action="import-pcontent" data-name="${esc(name)}">Importar</button>
+        <p id="pcFeedback" class="import-feedback"></p>
+      </div>
+      <div class="chip-list">${ichips || '<p class="hint">Sin contenido aún.</p>'}</div>
+    </div>`;
+}
+
+function renderDetail() {
+  const t = getTournament(activeTid);
+  if (!t) { view='home'; render(); return; }
+
+  // ── Calcular estadísticas completas ──
+  const stat = {};
+  const bonus = t.bonusPoints || {};
+  t.participants.forEach(p => { stat[p] = { v:0, e:0, d:0, pts:0, score:0 }; });
+
+  t.rounds.forEach(round => round.forEach(m => {
+    if (!m.result) return;
+    const { homeScore, awayScore } = m.result;
+    stat[m.home].score += homeScore;
+    stat[m.away].score += awayScore;
+    if (homeScore > awayScore) {
+      stat[m.home].v++; stat[m.away].d++;
+      stat[m.home].pts += 3;
+      stat[m.away].pts += awayScore >= 1 ? 1 : 0;
+    } else if (awayScore > homeScore) {
+      stat[m.away].v++; stat[m.home].d++;
+      stat[m.away].pts += 3;
+      stat[m.home].pts += homeScore >= 1 ? 1 : 0;
+    } else {
+      stat[m.home].e++; stat[m.away].e++;
+      const drawPts = homeScore >= 1 ? 2 : 0; // 0-0 no otorga puntos
+      stat[m.home].pts += drawPts; stat[m.away].pts += drawPts;
+    }
+  }));
+
+  const hasBonus = t.participants.some(p => (bonus[p] || 0) > 0);
+  const total = p => stat[p].pts + (bonus[p] || 0);
+
+  // ── Ordenar según sortBy ──
+  const sorters = {
+    total:  (a,b) => total(b)-total(a)  || stat[b].score-stat[a].score,
+    pts:    (a,b) => stat[b].pts-stat[a].pts  || stat[b].score-stat[a].score,
+    wins:   (a,b) => stat[b].v-stat[a].v     || stat[b].pts-stat[a].pts,
+    draws:  (a,b) => stat[b].e-stat[a].e     || stat[b].pts-stat[a].pts,
+    score:  (a,b) => stat[b].score-stat[a].score || stat[b].pts-stat[a].pts,
+    bonus:  (a,b) => (bonus[b]||0)-(bonus[a]||0) || stat[b].pts-stat[a].pts,
+  };
+  const ranking = [...t.participants].sort(sorters[sortBy] || sorters.total);
+
+  // ── Construir tabla ──
+  const col = key => key === sortBy ? 'sort-active' : '';
+  const arr = key => key === sortBy ? ' <span class="sort-arrow">▼</span>' : '';
+
+  const standingsHead = `<tr>
+    <th>#</th>
+    <th style="text-align:left">Participante</th>
+    <th class="${col('wins')}"    data-action="sort-by" data-key="wins">V${arr('wins')}</th>
+    <th class="${col('draws')}"   data-action="sort-by" data-key="draws">E${arr('draws')}</th>
+    <th>D</th>
+    <th class="${col('pts')}"     data-action="sort-by" data-key="pts">Pts${arr('pts')}</th>
+    <th class="${col('score')}"   data-action="sort-by" data-key="score">Puntaje${arr('score')}</th>
+    ${hasBonus ? `<th class="${col('bonus')}" data-action="sort-by" data-key="bonus">Extra${arr('bonus')}</th>` : ''}
+    <th class="${col('total')}"   data-action="sort-by" data-key="total">Total${arr('total')}</th>
+  </tr>`;
+
+  const sc = key => sortBy === key ? ' class="sort-col"' : '';
+  const standingsRows = ranking.map((p, i) => `
+    <tr>
+      <td class="rank">${i+1}</td>
+      <td>${esc(p)}</td>
+      <td${sc('wins')}   style="color:var(--accent-green)">${stat[p].v}</td>
+      <td${sc('draws')}  style="color:var(--accent-gold)">${stat[p].e}</td>
+      <td style="color:var(--accent-red)">${stat[p].d}</td>
+      <td${sc('pts')}    class="pts">${stat[p].pts}</td>
+      <td${sc('score')}  style="color:var(--text-muted)">${stat[p].score}</td>
+      ${hasBonus ? `<td${sc('bonus')} style="color:var(--accent-gold);font-family:'Oswald',sans-serif;font-weight:600">+${bonus[p]||0}</td>` : ''}
+      <td${sc('total')}  class="pts">${total(p)}</td>
+    </tr>`).join('');
+
+  // ── Jornadas + Ronda Extra integrada ──
+  const jornadasHtml = t.rounds.map((round, i) => {
+    const done = round.filter(m => m.result).length;
+    const inProg = round.filter(m => !m.result && m.progress).length;
+    const total = round.length;
+    const badge = done === total
+      ? `<span class="badge-done">✓ Completa</span>`
+      : inProg > 0
+        ? `<span class="badge-pending">${done}/${total} evaluados · ${inProg} en curso</span>`
+        : `<span class="badge-pending">${done}/${total} evaluados</span>`;
+    return `
+      <div class="jornada-card" data-action="open-round" data-round="${i}">
+        <div class="jornada-num-block">
+          <span class="jornada-label">Jornada</span>
+          <span class="jornada-number">${i+1}</span>
+        </div>
+        <div class="jornada-meta">
+          <span>${total} enfrentamiento${total===1?'':'s'}</span>
+          ${badge}
+          <span class="chevron">→</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Ronda extra: cantidad de participantes con bonus asignado (visitados)
+  const bonusAssigned = t.participants.filter(p => (bonus[p] || 0) > 0).length;
+  const bonusBadge = bonusAssigned > 0
+    ? `<span class="badge-done">✓ ${bonusAssigned}/${t.participants.length} con puntos</span>`
+    : `<span class="badge-pending">Sin asignar</span>`;
+
+  const extraRoundCard = `
+    <div class="jornada-card" style="border-color:rgba(216,168,78,.5)" data-action="open-bonus">
+      <div class="jornada-num-block">
+        <span class="jornada-label" style="color:var(--accent-gold)">Ronda</span>
+        <span class="jornada-number" style="color:var(--accent-gold)">★</span>
+      </div>
+      <div class="jornada-meta">
+        <span style="color:var(--accent-gold)">Ronda extra · ${t.participants.length} participantes</span>
+        ${bonusBadge}
+        <span class="chevron">→</span>
+      </div>
+    </div>`;
+
+  const standingsHidden = t.hideResults && !standingsRevealed;
+  const standingsBlock = standingsHidden
+    ? `
+        <div class="hidden-results-panel">
+          <span class="lock-icon">🔒</span>
+          <span class="lock-text">Los resultados están ocultos para mantener el suspenso.</span>
+          <button class="btn-secondary" data-action="toggle-standings-reveal">👁 Revelar tabla</button>
+        </div>`
+    : `
+        <div style="background:var(--bg-panel);border:1px solid var(--accent-gold-dim);border-radius:var(--radius);overflow:auto">
+          <table class="standings-table">
+            <thead>${standingsHead}</thead>
+            <tbody>${standingsRows}</tbody>
+          </table>
+        </div>
+        ${t.hideResults ? `<button class="btn-outline" data-action="toggle-standings-reveal" style="align-self:center;margin-top:8px">🙈 Ocultar de nuevo</button>` : ''}`;
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <button class="back-link" data-action="home">← Torneos</button>
+      <header class="page-header">
+        <span class="eyebrow">${t.participants.length} participantes · ${t.contentType === 'individual' ? 'contenido individual por participante' : t.contentType === 'buffet' ? `buffet · ${(t.buffetData?.Temas||[]).length} temas` : sharedContentSummary(t)}</span>
+        <h1>${esc(t.name)}</h1>
+      </header>
+
+      ${t.contentType === 'buffet' ? `
+        <button class="btn-secondary" data-action="buffet-edit-open" style="align-self:flex-start">✎ Editar contenido buffet</button>
+      ` : ''}
+      ${t.contentType === 'shared' ? `
+        <button class="btn-secondary" data-action="shared-edit-open" style="align-self:flex-start">✎ Editar contenido por jornada</button>
+      ` : ''}
+      <label class="hide-results-toggle" data-action="toggle-hide-results" style="align-self:flex-start">
+        <input type="checkbox" ${t.hideResults ? 'checked' : ''} style="pointer-events:none">
+        <span>🔒 Ocultar resultados durante el juego</span>
+      </label>
+
+      <section>
+        <h2 class="section-title">Clasificación <span style="font-size:.7rem;color:var(--text-muted);letter-spacing:0;text-transform:none;font-family:'Inter',sans-serif">· toca una columna para ordenar</span></h2>
+        ${standingsBlock}
+      </section>
+
+      <section>
+        <h2 class="section-title">Jornadas</h2>
+        <div class="jornada-list">
+          ${jornadasHtml}
+          ${extraRoundCard}
+        </div>
+      </section>
+    </div>`;
+}
+
+function renderBuffetEdit() {
+  const t = getTournament(activeTid);
+  if (!t) { view='home'; render(); return; }
+  if (!editBuffetData) editBuffetData = JSON.parse(JSON.stringify(t.buffetData || { Temas: [] }));
+
+  const Temas = editBuffetData.Temas || [];
+  if (editBuffetTema === null || !Temas.find(d => String(d.Tema) === String(editBuffetTema))) {
+    editBuffetTema = Temas[0]?.Tema ?? null;
+  }
+
+  const TemaChips = Temas.map(d => `
+    <button class="p-select-chip ${String(d.Tema)===String(editBuffetTema)?'active':''}" data-action="buffet-edit-Tema" data-tema="${d.Tema}">
+      Tema ${d.Tema} <span class="count">${(d.preguntas||[]).length}p</span>
+    </button>`).join('');
+
+  const TemaObj = Temas.find(d => String(d.Tema) === String(editBuffetTema));
+  const preguntasHtml = (TemaObj?.preguntas || []).map((q, qi) => `
+    <div class="buffet-q-editor">
+      <div class="buffet-q-num">Pregunta ${qi+1}</div>
+      <label class="buffet-field-label">Pregunta</label>
+      <textarea class="buffet-field" rows="2" data-action="edit-field" data-field="pregunta" data-tema="${editBuffetTema}" data-qi="${qi}">${esc(q.pregunta||'')}</textarea>
+      <label class="buffet-field-label">Respuesta</label>
+      <textarea class="buffet-field" rows="2" data-action="edit-field" data-field="respuesta" data-tema="${editBuffetTema}" data-qi="${qi}">${esc(q.respuesta||'')}</textarea>
+      <label class="buffet-field-label">Justificación</label>
+      <textarea class="buffet-field" rows="3" data-action="edit-field" data-field="justificacion" data-tema="${editBuffetTema}" data-qi="${qi}">${esc(q.justificacion||'')}</textarea>
+      <button class="buffet-q-rm" data-action="buffet-edit-rm-q" data-tema="${editBuffetTema}" data-qi="${qi}">🗑 Eliminar esta pregunta</button>
+    </div>`).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <button class="back-link" data-action="buffet-edit-cancel">← ${esc(t.name)}</button>
+      <header class="page-header">
+        <span class="eyebrow">Editar contenido</span>
+        <h1>Buffet · ${esc(t.name)}</h1>
+      </header>
+      <p class="hint">Corregí preguntas, respuestas o justificaciones que hayan quedado mal. Los cambios recién se guardan al tocar "Guardar cambios".</p>
+
+      <div class="form-block">
+        <label>Temas</label>
+        <div class="chip-list">${TemaChips || '<p class="hint">Este torneo no tiene temas buffet cargados.</p>'}</div>
+        ${Temas.length ? `<button class="btn-outline" data-action="buffet-edit-download" style="align-self:flex-start;margin-top:8px">⬇️ Descargar JSON (todos los temas)</button>` : ''}
+      </div>
+
+      ${TemaObj ? `
+        <div class="form-block">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <label style="margin:0">Preguntas del tema ${editBuffetTema} (${(TemaObj.preguntas||[]).length})</label>
+            ${(TemaObj.preguntas||[]).length > 0 ? `<button class="btn-outline" data-action="buffet-edit-clear-q" style="height:34px;font-size:.74rem;padding:0 12px;white-space:nowrap">🗑 Vaciar todas</button>` : ''}
+          </div>
+          <div class="buffet-q-list">${preguntasHtml || '<p class="hint">Sin preguntas en este tema.</p>'}</div>
+        </div>
+
+        <div class="form-block">
+          <div class="pcontent-editor">
+            <span class="pcontent-editor-label">Formato para copiar/pegar</span>
+            <p class="hint">Copiá este formato, completalo (podés poner varias preguntas separadas por coma) y pegalo abajo.</p>
+            <pre id="buffetFormatSample" style="background:var(--bg-panel);border:1px solid var(--accent-gold-dim);border-radius:8px;padding:10px 12px;font-size:.76rem;white-space:pre-wrap;overflow-x:auto;margin:0">{
+  "pregunta": "",
+  "respuesta": "",
+  "justificacion": ""
+}</pre>
+            <button class="btn-secondary" data-action="buffet-copy-format" style="align-self:flex-start;height:34px;font-size:.74rem">📋 Copiar formato</button>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <div class="pcontent-editor">
+            <span class="pcontent-editor-label">Pegar preguntas al tema ${editBuffetTema}</span>
+            <textarea id="buffetPasteArea" placeholder='Pegá acá uno o varios objetos { "pregunta": ..., "respuesta": ..., "justificacion": ... }' style="min-height:120px;font-family:monospace;font-size:.8rem"></textarea>
+            <button class="btn-secondary" data-action="buffet-edit-paste-q" style="align-self:flex-start">📥 Agregar preguntas pegadas</button>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <div class="pcontent-editor">
+            <span class="pcontent-editor-label">Agregar pregunta al tema ${editBuffetTema}</span>
+            <input id="buffetNewPregunta" type="text" placeholder="Pregunta">
+            <input id="buffetNewRespuesta" type="text" placeholder="Respuesta">
+            <textarea id="buffetNewJustificacion" placeholder="Justificación (opcional)" style="min-height:60px"></textarea>
+            <button class="btn-secondary" data-action="buffet-edit-add-q" style="align-self:flex-start">+ Agregar pregunta</button>
+          </div>
+        </div>
+      ` : ''}
+
+      <button class="btn-primary" data-action="buffet-edit-save">Guardar cambios</button>
+      <button class="btn-outline" data-action="buffet-edit-cancel">Cancelar</button>
+    </div>`;
+}
+
+function renderSharedEdit() {
+  const t = getTournament(activeTid);
+  if (!t) { view='home'; render(); return; }
+  if (!editSharedData) editSharedData = ensureQuestionsByRound(t);
+
+  const rounds = editSharedData;
+  if (editSharedRound === null || !rounds.find(r => r.round === editSharedRound)) {
+    editSharedRound = rounds[0]?.round ?? null;
+  }
+
+  const roundChips = rounds.map(r => `
+    <button class="p-select-chip ${r.round===editSharedRound?'active':''} ${(r.questions||[]).length===0?'empty':''}" data-action="shared-edit-round" data-round="${r.round}">
+      Jornada ${r.round} <span class="count">${(r.questions||[]).length}</span>
+    </button>`).join('');
+
+  const roundObj = rounds.find(r => r.round === editSharedRound);
+  const questionsHtml = (roundObj?.questions || []).map((q, qi) => `
+    <div class="buffet-q-editor">
+      <div class="buffet-q-num">Pregunta ${qi+1}</div>
+      <textarea class="buffet-field" rows="2" data-action="shared-edit-field" data-round="${editSharedRound}" data-qi="${qi}">${esc(q.text||'')}</textarea>
+      <button class="buffet-q-rm" data-action="shared-edit-rm-q" data-round="${editSharedRound}" data-qi="${qi}">🗑 Eliminar esta pregunta</button>
+    </div>`).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <button class="back-link" data-action="shared-edit-cancel">← ${esc(t.name)}</button>
+      <header class="page-header">
+        <span class="eyebrow">Editar contenido</span>
+        <h1>Por jornada · ${esc(t.name)}</h1>
+      </header>
+      <p class="hint">Cada jornada tiene su propio contenido: podés definir preguntas distintas fecha a fecha. Los cambios recién se guardan al tocar "Guardar cambios".</p>
+
+      <div class="form-block">
+        <label>Jornadas</label>
+        <div class="chip-list">${roundChips || '<p class="hint">Este torneo no tiene jornadas.</p>'}</div>
+      </div>
+
+      ${roundObj ? `
+        <div class="form-block">
+          <label>Preguntas de la Jornada ${editSharedRound}</label>
+          <div class="buffet-q-list">${questionsHtml || '<p class="hint">Sin preguntas en esta jornada.</p>'}</div>
+        </div>
+
+        <div class="form-block">
+          <div class="pcontent-editor">
+            <span class="pcontent-editor-label">Agregar pregunta a la Jornada ${editSharedRound}</span>
+            <input id="sharedNewQuestion" type="text" placeholder="Pregunta">
+            <button class="btn-secondary" data-action="shared-edit-add-q" style="align-self:flex-start">+ Agregar pregunta</button>
+          </div>
+        </div>
+      ` : ''}
+
+      <button class="btn-primary" data-action="shared-edit-save">Guardar cambios</button>
+      <button class="btn-outline" data-action="shared-edit-cancel">Cancelar</button>
+    </div>`;
+}
+
+function renderBonus() {
+  const t = getTournament(activeTid);
+  if (!t) { view='home'; render(); return; }
+
+  const participants = t.participants;
+  if (bonusIdx < 0) bonusIdx = 0;
+  if (bonusIdx >= participants.length) bonusIdx = participants.length - 1;
+
+  const name = participants[bonusIdx];
+  const score = bonusScores[name] ?? 0;
+  const isLast = bonusIdx === participants.length - 1;
+
+  const dots = participants.map((p, i) => {
+    const hasPts = (bonusScores[p] ?? 0) > 0 || i < bonusIdx;
+    const cls = i === bonusIdx ? 'bonus-dot current'
+      : (hasPts ? 'bonus-dot done' : 'bonus-dot');
+    return `<div class="${cls}" data-action="bonus-go" data-idx="${i}" title="${esc(p)}"></div>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <button class="back-link" data-action="bonus-cancel">← ${esc(t.name)}</button>
+
+      <header class="page-header">
+        <span class="eyebrow">${esc(t.name)}</span>
+        <h1>Puntos extra</h1>
+      </header>
+
+      <div class="bonus-counter">${bonusIdx+1} de ${participants.length}</div>
+      <div class="bonus-dots">${dots}</div>
+
+      <div class="bonus-player-card">
+        <div class="bonus-player-name">${esc(name)}</div>
+        <div class="bonus-score-display" id="bonusScore">${score}</div>
+        <div class="bonus-score-btns">
+          <button class="bonus-btn minus" data-action="bonus-delta" data-delta="-1">−</button>
+          <button class="bonus-btn plus"  data-action="bonus-delta" data-delta="1">+</button>
+        </div>
+        <div class="bonus-custom-row">
+          <input id="bonusCustom" type="number" min="0" placeholder="Pts directos">
+          <button data-action="bonus-set">OK</button>
+        </div>
+      </div>
+
+      <div class="bonus-nav">
+        <button class="btn-bonus-nav secondary" data-action="bonus-prev" ${bonusIdx===0?'disabled':''}>← Anterior</button>
+        ${isLast
+          ? `<button class="btn-bonus-nav primary" data-action="bonus-save">Guardar ✓</button>`
+          : `<button class="btn-bonus-nav primary" data-action="bonus-next">Siguiente →</button>`}
+      </div>
+    </div>`;
+}
+
+// ── event delegation ──
+document.getElementById('app').addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+
+  if (action === 'new') {
+    draftParticipants = []; draftQuestions = []; draftName = ''; inputMode = 'manual'; questionInputMode = 'manual';
+    contentType = 'shared'; draftParticipantContent = {}; editingParticipant = null; pcInputMode = 'manual';
+    draftBuffetData = null; draftParticipantTemas = {}; buffetAssigningParticipant = null;
+    draftQuestionsByRound = {}; sharedEditingRound = null;
+    draftHideResults = false;
+    view = 'form'; render();
+
+  } else if (action === 'home') {
+    view = 'home'; standingsRevealed = false; render();
+
+  } else if (action === 'open') {
+    activeTid = el.dataset.id; standingsRevealed = false; view = 'detail'; render();
+
+  } else if (action === 'delete') {
+    if (!confirm('¿Eliminar este torneo?')) return;
+    dbDelete(el.dataset.id);
+    if (activeTid === el.dataset.id) activeTid = null;
+    render();
+
+  } else if (action === 'export-tournament') {
+    const t = getTournament(el.dataset.id);
+    if (!t) return;
+    downloadJSON(t, `${slugify(t.name)}-torneo.json`);
+
+  } else if (action === 'import-tournament-open') {
+    document.getElementById('importTournamentInput')?.click();
+
+  } else if (action === 'mode-p') {
+    syncDraftName(); inputMode = el.dataset.mode; render();
+
+  } else if (action === 'mode-q') {
+    syncDraftName(); questionInputMode = el.dataset.mode; render();
+
+  } else if (action === 'add-participant') {
+    syncDraftName();
+    const inp = document.getElementById('participantInput');
+    const val = inp?.value.trim();
+    if (val && !draftParticipants.includes(val)) { draftParticipants.push(val); }
+    if (inp) inp.value = '';
+    render(); document.getElementById('participantInput')?.focus();
+
+  } else if (action === 'rm-participant') {
+    syncDraftName();
+    const removed = draftParticipants[+el.dataset.index];
+    draftParticipants.splice(+el.dataset.index, 1);
+    if (removed) { delete draftParticipantContent[removed]; delete draftParticipantTemas[removed]; }
+    if (editingParticipant === removed) editingParticipant = draftParticipants[0] || null;
+    if (buffetAssigningParticipant === removed) buffetAssigningParticipant = null;
+    render();
+
+  } else if (action === 'import-participants') {
+    syncDraftName();
+    const raw = document.getElementById('pJsonInput')?.value.trim() || '';
+    const fb = document.getElementById('pFeedback');
+    let names;
+    try { const parsed = JSON.parse(raw); names = Array.isArray(parsed) ? parsed.map(String) : null; }
+    catch { names = raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean); }
+    if (!names || !names.length) { fb.textContent='No se encontraron nombres.'; fb.className='import-feedback err'; return; }
+    let added=0;
+    names.forEach(n => { if(n&&!draftParticipants.includes(n)){ draftParticipants.push(n); added++; } });
+    fb.textContent=`${added} importado${added===1?'':'s'}.`; fb.className='import-feedback ok';
+    render();
+
+  } else if (action === 'shared-select-round') {
+    syncDraftName();
+    sharedEditingRound = +el.dataset.round;
+    render();
+    document.getElementById('questionInput')?.focus();
+
+  } else if (action === 'add-question') {
+    syncDraftName();
+    const inp = document.getElementById('questionInput');
+    const val = inp?.value.trim();
+    if (val && sharedEditingRound) {
+      if (!draftQuestionsByRound[sharedEditingRound]) draftQuestionsByRound[sharedEditingRound] = [];
+      draftQuestionsByRound[sharedEditingRound].push({ text: val });
+    }
+    if (inp) inp.value = '';
+    render(); document.getElementById('questionInput')?.focus();
+
+  } else if (action === 'rm-question') {
+    syncDraftName();
+    const round = +el.dataset.round;
+    (draftQuestionsByRound[round] || []).splice(+el.dataset.index, 1);
+    render();
+
+  } else if (action === 'import-questions') {
+    syncDraftName();
+    const raw = document.getElementById('qBulkInput')?.value.trim() || '';
+    const lines = raw.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+    const fb = document.getElementById('qFeedback');
+    if (!lines.length) { fb.textContent='No se encontraron preguntas.'; fb.className='import-feedback err'; return; }
+    if (sharedEditingRound) {
+      if (!draftQuestionsByRound[sharedEditingRound]) draftQuestionsByRound[sharedEditingRound] = [];
+      lines.forEach(l => draftQuestionsByRound[sharedEditingRound].push({ text: l }));
+    }
+    fb.textContent=`${lines.length} pregunta${lines.length===1?'':'s'} importada${lines.length===1?'':'s'} para la Jornada ${sharedEditingRound}.`; fb.className='import-feedback ok';
+    render();
+
+  } else if (action === 'content-type') {
+    syncDraftName();
+    contentType = el.dataset.type;
+    if (contentType === 'individual' && !editingParticipant && draftParticipants.length) {
+      editingParticipant = draftParticipants[0];
+    }
+    render();
+
+  } else if (action === 'edit-pcontent') {
+    syncDraftName();
+    editingParticipant = el.dataset.name;
+    pcInputMode = 'manual';
+    render();
+    document.getElementById('pcInput')?.focus();
+
+  } else if (action === 'pc-mode') {
+    pcInputMode = el.dataset.mode; render();
+
+  } else if (action === 'add-pcontent') {
+    const name = el.dataset.name;
+    const inp = document.getElementById('pcInput');
+    const val = inp?.value.trim();
+    if (val) {
+      if (!draftParticipantContent[name]) draftParticipantContent[name] = [];
+      draftParticipantContent[name].push({ text: val });
+    }
+    if (inp) inp.value = '';
+    render(); document.getElementById('pcInput')?.focus();
+
+  } else if (action === 'rm-pcontent') {
+    const name = el.dataset.name;
+    (draftParticipantContent[name] || []).splice(+el.dataset.index, 1);
+    render();
+
+  } else if (action === 'import-pcontent') {
+    const name = el.dataset.name;
+    const raw = document.getElementById('pcBulkInput')?.value.trim() || '';
+    const lines = raw.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+    const fb = document.getElementById('pcFeedback');
+    if (!lines.length) { fb.textContent='No se encontraron elementos.'; fb.className='import-feedback err'; return; }
+    if (!draftParticipantContent[name]) draftParticipantContent[name] = [];
+    lines.forEach(l => draftParticipantContent[name].push({ text: l }));
+    fb.textContent=`${lines.length} elemento${lines.length===1?'':'s'} importado${lines.length===1?'':'s'} para ${name}.`; fb.className='import-feedback ok';
+    render();
+
+  } else if (action === 'buffet-file') {
+    // handled by change event below
+
+  } else if (action === 'toggle-Tema') {
+    syncDraftName();
+    const name = el.dataset.name;
+    // El tema puede ser numérico o texto: buscamos el valor "real" en draftBuffetData
+    // para no perder su tipo original (por si viene de un JSON con temas numéricos).
+    const rawTema = el.dataset.tema;
+    const match = (draftBuffetData?.Temas || []).find(d => String(d.Tema) === String(rawTema));
+    const Tema = match ? match.Tema : rawTema;
+    if (!draftParticipantTemas[name]) draftParticipantTemas[name] = [];
+    const idx = draftParticipantTemas[name].findIndex(x => String(x) === String(Tema));
+    if (idx >= 0) draftParticipantTemas[name].splice(idx, 1);
+    else draftParticipantTemas[name].push(Tema);
+    draftParticipantTemas[name].sort((a, b) =>
+      String(a).localeCompare(String(b), 'es', { numeric: true, sensitivity: 'base' })
+    );
+    render();
+
+  } else if (action === 'buffet-assign') {
+    syncDraftName();
+    buffetAssigningParticipant = el.dataset.name;
+    render();
+
+  } else if (action === 'buffet-auto') {
+    syncDraftName();
+    const name = el.dataset.name;
+    if (draftBuffetData) {
+      const allTemas = draftBuffetData.Temas.map(d => d.Tema);
+      draftParticipantTemas[name] = [allTemas[Math.floor(Math.random() * allTemas.length)]];
+    }
+    render();
+
+  } else if (action === 'buffet-auto-all') {
+    syncDraftName();
+    if (draftBuffetData) {
+      const allTemas = draftBuffetData.Temas.map(d => d.Tema);
+      draftParticipants.forEach((p, i) => {
+        draftParticipantTemas[p] = [allTemas[i % allTemas.length]];
+      });
+    }
+    render();
+
+  } else if (action === 'buffet-clear') {
+    syncDraftName();
+    draftBuffetData = null;
+    draftParticipantTemas = {};
+    buffetAssigningParticipant = null;
+    render();
+
+  } else if (action === 'toggle-hide-results-draft') {
+    syncDraftName();
+    draftHideResults = !draftHideResults;
+    render();
+
+  } else if (action === 'create') {
+    syncDraftName();
+    const nameEl = document.getElementById('tournamentNameInput');
+    const name = nameEl?.value.trim() || draftName;
+    if (!name || draftParticipants.length < 2) return;
+    const rounds = generateRounds(draftParticipants);
+    if (contentType === 'shared' && !rounds.every((_, i) => (draftQuestionsByRound[i+1]||[]).length >= 1)) return;
+    if (contentType === 'individual' && !draftParticipants.every(p => (draftParticipantContent[p]||[]).length >= 1)) return;
+    if (contentType === 'buffet' && (!draftBuffetData || !draftParticipants.every(p => (draftParticipantTemas[p]||[]).length >= 1))) return;
+    const tournament = {
+      id: 'trn_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+      name,
+      participants: [...draftParticipants],
+      contentType,
+      questions: [],
+      questionsByRound: contentType === 'shared'
+        ? rounds.map((_, i) => ({ round: i+1, questions: [...(draftQuestionsByRound[i+1]||[])] }))
+        : [],
+      participantContent: contentType === 'individual'
+        ? Object.fromEntries(draftParticipants.map(p => [p, [...(draftParticipantContent[p]||[])]]))
+        : {},
+      buffetData: contentType === 'buffet' ? draftBuffetData : null,
+      participantTemas: contentType === 'buffet'
+        ? Object.fromEntries(draftParticipants.map(p => [p, [...(draftParticipantTemas[p]||[])]]))
+        : {},
+      rounds,
+      hideResults: draftHideResults,
+      createdAt: Date.now()
+    };
+    const all = loadAll(); all.push(tournament); saveAll(all);
+    activeTid = tournament.id; view = 'detail'; render();
+
+  } else if (action === 'toggle-hide-results') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    t.hideResults = !t.hideResults;
+    saveTournament(t);
+    if (!t.hideResults) standingsRevealed = false;
+    render();
+
+  } else if (action === 'toggle-standings-reveal') {
+    standingsRevealed = !standingsRevealed;
+    render();
+
+  } else if (action === 'sort-by') {
+    sortBy = el.dataset.key; render();
+
+  } else if (action === 'open-bonus') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    // pre-cargar puntos bonus ya guardados
+    bonusScores = Object.fromEntries(t.participants.map(p => [p, t.bonusPoints?.[p] ?? 0]));
+    bonusIdx = 0;
+    view = 'bonus'; render();
+
+  } else if (action === 'bonus-cancel') {
+    view = 'detail'; render();
+
+  } else if (action === 'bonus-go') {
+    bonusIdx = +el.dataset.idx; render();
+
+  } else if (action === 'bonus-prev') {
+    if (bonusIdx > 0) { bonusIdx--; render(); }
+
+  } else if (action === 'bonus-next') {
+    const t = getTournament(activeTid);
+    if (t && bonusIdx < t.participants.length - 1) { bonusIdx++; render(); }
+
+  } else if (action === 'bonus-delta') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    const name = t.participants[bonusIdx];
+    bonusScores[name] = Math.max(0, (bonusScores[name] ?? 0) + +el.dataset.delta);
+    const el2 = document.getElementById('bonusScore');
+    if (el2) {
+      el2.textContent = bonusScores[name];
+      el2.classList.remove('bump'); void el2.offsetWidth; el2.classList.add('bump');
+      setTimeout(() => el2.classList.remove('bump'), 300);
+    }
+
+  } else if (action === 'bonus-set') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    const name = t.participants[bonusIdx];
+    const inp = document.getElementById('bonusCustom');
+    const val = parseInt(inp?.value ?? '', 10);
+    if (!isNaN(val) && val >= 0) {
+      bonusScores[name] = val;
+      if (inp) inp.value = '';
+      const el2 = document.getElementById('bonusScore');
+      if (el2) el2.textContent = val;
+    }
+
+  } else if (action === 'bonus-save') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    t.bonusPoints = { ...bonusScores };
+    saveTournament(t);
+    view = 'detail'; render();
+
+  } else if (action === 'open-round') {
+    const round = +el.dataset.round;
+    window.location.href = `Jornada.html?tid=${encodeURIComponent(activeTid)}&round=${round}`;
+
+  } else if (action === 'buffet-edit-open') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    editBuffetData = JSON.parse(JSON.stringify(t.buffetData || { Temas: [] }));
+    editBuffetTema = editBuffetData.Temas[0]?.Tema ?? null;
+    view = 'buffet-edit'; render();
+
+  } else if (action === 'buffet-edit-Tema') {
+    editBuffetTema = el.dataset.tema; render();
+
+  } else if (action === 'buffet-edit-rm-q') {
+    const Tema = el.dataset.tema;
+    const qi = +el.dataset.qi;
+    if (!confirm('¿Eliminar esta pregunta del tema ' + Tema + '?')) return;
+    const TemaObj = editBuffetData?.Temas.find(d => String(d.Tema) === String(Tema));
+    if (TemaObj) { TemaObj.preguntas.splice(qi, 1); render(); }
+
+  } else if (action === 'buffet-edit-add-q') {
+    const pregunta = document.getElementById('buffetNewPregunta')?.value.trim();
+    const respuesta = document.getElementById('buffetNewRespuesta')?.value.trim();
+    const justificacion = document.getElementById('buffetNewJustificacion')?.value.trim() || '';
+    if (!pregunta || !respuesta) { alert('Completá al menos la pregunta y la respuesta.'); return; }
+    const TemaObj = editBuffetData?.Temas.find(d => String(d.Tema) === String(editBuffetTema));
+    if (TemaObj) {
+      if (!TemaObj.preguntas) TemaObj.preguntas = [];
+      TemaObj.preguntas.push({ pregunta, respuesta, justificacion });
+      render();
+    }
+
+  } else if (action === 'buffet-edit-clear-q') {
+    const TemaObj = editBuffetData?.Temas.find(d => String(d.Tema) === String(editBuffetTema));
+    if (!TemaObj) return;
+    const cant = (TemaObj.preguntas || []).length;
+    if (!confirm(`¿Eliminar las ${cant} preguntas del tema ${editBuffetTema}? Esta acción no se puede deshacer.`)) return;
+    TemaObj.preguntas = [];
+    render();
+
+  } else if (action === 'buffet-copy-format') {
+    const sample = '{\n  "pregunta": "",\n  "respuesta": "",\n  "justificacion": ""\n}';
+    copyToClipboard(sample);
+
+  } else if (action === 'buffet-edit-paste-q') {
+    const textarea = document.getElementById('buffetPasteArea');
+    const raw = textarea?.value.trim();
+    if (!raw) { alert('Pegá primero el texto con las preguntas.'); return; }
+    const parsed = parseQuestionsPaste(raw);
+    if (!parsed || parsed.length === 0) {
+      alert('No pude leer ese texto. Revisá que tenga el formato { "pregunta": ..., "respuesta": ..., "justificacion": ... }.');
+      return;
+    }
+    const TemaObj = editBuffetData?.Temas.find(d => String(d.Tema) === String(editBuffetTema));
+    if (TemaObj) {
+      if (!TemaObj.preguntas) TemaObj.preguntas = [];
+      TemaObj.preguntas.push(...parsed);
+      if (textarea) textarea.value = '';
+      render();
+    }
+
+  } else if (action === 'buffet-edit-download') {
+    const t = getTournament(activeTid);
+    if (!editBuffetData || !t) return;
+    downloadJSON(editBuffetData, `${slugify(t.name)}-preguntas-por-tema.json`);
+
+  } else if (action === 'buffet-edit-save') {
+    const t = getTournament(activeTid);
+    if (!t || !editBuffetData) return;
+    t.buffetData = editBuffetData;
+    saveTournament(t);
+    editBuffetData = null; editBuffetTema = null;
+    view = 'detail'; render();
+
+  } else if (action === 'buffet-edit-cancel') {
+    editBuffetData = null; editBuffetTema = null;
+    view = 'detail'; render();
+
+  } else if (action === 'shared-edit-open') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    editSharedData = ensureQuestionsByRound(t);
+    editSharedRound = editSharedData[0]?.round ?? null;
+    view = 'shared-edit'; render();
+
+  } else if (action === 'shared-edit-round') {
+    editSharedRound = +el.dataset.round; render();
+
+  } else if (action === 'shared-edit-rm-q') {
+    const round = +el.dataset.round;
+    const qi = +el.dataset.qi;
+    if (!confirm('¿Eliminar esta pregunta de la Jornada ' + round + '?')) return;
+    const roundObj = editSharedData?.find(r => r.round === round);
+    if (roundObj) { roundObj.questions.splice(qi, 1); render(); }
+
+  } else if (action === 'shared-edit-add-q') {
+    const inp = document.getElementById('sharedNewQuestion');
+    const text = inp?.value.trim();
+    if (!text) { alert('Escribí la pregunta.'); return; }
+    const roundObj = editSharedData?.find(r => r.round === editSharedRound);
+    if (roundObj) {
+      if (!roundObj.questions) roundObj.questions = [];
+      roundObj.questions.push({ text });
+      render();
+    }
+
+  } else if (action === 'shared-edit-save') {
+    const t = getTournament(activeTid);
+    if (!t || !editSharedData) return;
+    if (editSharedData.some(r => (r.questions||[]).length < 1)) {
+      alert('Cada jornada necesita al menos 1 pregunta.');
+      return;
+    }
+    t.questionsByRound = editSharedData;
+    t.questions = [];
+    saveTournament(t);
+    editSharedData = null; editSharedRound = null;
+    view = 'detail'; render();
+
+  } else if (action === 'shared-edit-cancel') {
+    editSharedData = null; editSharedRound = null;
+    view = 'detail'; render();
+  }
+});
+
+// ── edición de campos de texto del buffet (sin re-render, para no perder el foco) ──
+document.getElementById('app').addEventListener('input', e => {
+  if (e.target?.dataset?.action === 'edit-field') {
+    const Tema = e.target.dataset.tema;
+    const qi = +e.target.dataset.qi;
+    const field = e.target.dataset.field;
+    const TemaObj = editBuffetData?.Temas.find(d => String(d.Tema) === String(Tema));
+    if (TemaObj && TemaObj.preguntas[qi]) {
+      TemaObj.preguntas[qi][field] = e.target.value;
+    }
+  }
+  if (e.target?.dataset?.action === 'shared-edit-field') {
+    const round = +e.target.dataset.round;
+    const qi = +e.target.dataset.qi;
+    const roundObj = editSharedData?.find(r => r.round === round);
+    if (roundObj && roundObj.questions[qi]) {
+      roundObj.questions[qi].text = e.target.value;
+    }
+  }
+});
+
+// ── importar torneo completo desde JSON (lista de torneos) ──
+document.getElementById('app').addEventListener('change', e => {
+  if (e.target?.id === 'importTournamentInput') {
+    const file = e.target.files[0];
+    e.target.value = ''; // permite volver a elegir el mismo archivo más tarde
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (err) {
+        alert('Error al parsear el JSON: ' + err.message);
+        return;
+      }
+      if (!data || typeof data !== 'object' || !data.name || !Array.isArray(data.participants) || !Array.isArray(data.rounds)) {
+        alert('El archivo no tiene el formato esperado de un torneo (faltan "name", "participants" o "rounds").');
+        return;
+      }
+      const all = loadAll();
+      // evitar pisar un torneo existente: si el id ya existe (o no tiene), le asignamos uno nuevo
+      if (!data.id || all.some(t => t.id === data.id)) {
+        data.id = 'tid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      }
+      saveTournament(data);
+      render();
+      alert(`Torneo "${data.name}" importado correctamente.`);
+    };
+    reader.readAsText(file);
+  }
+  if (e.target?.id === 'buffetFileInput') {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data.Temas || !Array.isArray(data.Temas) || data.Temas.length === 0) {
+          alert('El JSON debe tener una propiedad "Temas" con al menos un tema.');
+          return;
+        }
+        draftBuffetData = data;
+        // auto-asignar el primer tema a cada participante si no tiene ninguno
+        draftParticipants.forEach(p => {
+          if (!draftParticipantTemas[p] || draftParticipantTemas[p].length === 0) {
+            draftParticipantTemas[p] = [data.Temas[0].Tema];
+          }
+        });
+        render();
+      } catch (err) {
+        alert('Error al parsear el JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+});
+
+document.getElementById('app').addEventListener('keydown', e => {
+  if (e.target?.id === 'participantInput' && e.key === 'Enter') {
+    e.preventDefault();
+    document.querySelector('[data-action="add-participant"]')?.click();
+  }
+  if (e.target?.id === 'questionInput' && e.key === 'Enter') {
+    e.preventDefault();
+    document.querySelector('[data-action="add-question"]')?.click();
+  }
+  if (e.target?.id === 'pcInput' && e.key === 'Enter') {
+    e.preventDefault();
+    document.querySelector('[data-action="add-pcontent"]')?.click();
+  }
+  if (e.target?.id === 'bonusCustom' && e.key === 'Enter') {
+    e.preventDefault();
+    document.querySelector('[data-action="bonus-set"]')?.click();
+  }
+  if (e.target?.id === 'sharedNewQuestion' && e.key === 'Enter') {
+    e.preventDefault();
+    document.querySelector('[data-action="shared-edit-add-q"]')?.click();
+  }
+});
+
+render();
+</script>
+</body>
+</html>
