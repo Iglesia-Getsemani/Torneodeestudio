@@ -366,7 +366,7 @@ body {
 <body>
 <div id="app"></div>
 <script type="module">
-const { loadAll, saveAll, getTournament, saveTournament, deleteTournament: dbDelete, generateRounds, esc, ensureQuestionsByRound, ensureRoundTemas, addParticipants } = await import(`./storage.js?v=${Date.now()}`);
+const { loadAll, saveAll, getTournament, saveTournament, deleteTournament: dbDelete, generateRounds, esc, ensureQuestionsByRound, ensureRoundTemas, ensureRoundQuestionsPerTema, addParticipants } = await import(`./storage.js?v=${Date.now()}`);
 
 // ── state ──
 let view = 'home';          // home | form | detail | bonus | add-participants
@@ -647,6 +647,7 @@ let editSharedRound = null;  // jornada (1-based) seleccionada en la vista de ed
 // ── edición de la asignación de TEMAS por jornada (modo 'temas') en un torneo YA CREADO ──
 let editRoundTemas = null;        // copia editable de t.roundTemas mientras se edita
 let editRoundTemasRound = null;   // jornada (1-based) seleccionada en la vista de edición
+let editRoundQuestionsPerTema = null; // copia editable de t.roundQuestionsPerTema (cantidad de preguntas por tema, por jornada)
 
 // ── bonus: puntos extra al final del torneo ──
 let bonusIdx = 0;             // índice del participante actual en la fase bonus
@@ -1386,6 +1387,7 @@ function renderRoundTemasEdit() {
   const t = getTournament(activeTid);
   if (!t) { view='home'; render(); return; }
   if (!editRoundTemas) editRoundTemas = ensureRoundTemas(t);
+  if (!editRoundQuestionsPerTema) editRoundQuestionsPerTema = ensureRoundQuestionsPerTema(t);
 
   const bd = t.buffetData;
   const availTemas = bd ? bd.Temas.map(d => d.Tema) : [];
@@ -1407,6 +1409,25 @@ function renderRoundTemasEdit() {
     return `<button class="p-select-chip ${on?'active':''}" data-action="round-temas-edit-toggle" data-tema="${d}" data-round="${editRoundTemasRound}">Tema ${d} <span class="count">${qCount}p</span></button>`;
   }).join('');
 
+  const qptValue = editRoundQuestionsPerTema[editRoundTemasRound] ?? null;
+  const qptOptions = [
+    { n: 'all', label: 'Todas' },
+    { n: 1, label: '1' },
+    { n: 2, label: '2' },
+    { n: 3, label: '3' }
+  ];
+  const qptChips = qptOptions.map(opt => {
+    const active = opt.n === 'all' ? qptValue === null : qptValue === opt.n;
+    return `<button class="tab ${active?'active':''}" data-action="round-temas-edit-qpt" data-round="${editRoundTemasRound}" data-n="${opt.n}">${opt.label}</button>`;
+  }).join('');
+
+  const totalPreguntas = assigned.reduce((s, d) => {
+    const Tema = bd.Temas.find(x => x.Tema === d);
+    if (!Tema) return s;
+    const disponibles = Tema.preguntas.length;
+    return s + (qptValue !== null ? Math.min(qptValue, disponibles) : disponibles);
+  }, 0);
+
   document.getElementById('app').innerHTML = `
     <div class="page">
       <button class="back-link" data-action="round-temas-edit-cancel">← ${esc(t.name)}</button>
@@ -1425,8 +1446,14 @@ function renderRoundTemasEdit() {
         <div class="form-block">
           <label>Temas de la Jornada ${editRoundTemasRound}</label>
           <div class="chip-list">${TemaToggles || '<p class="hint">Este torneo no tiene temas cargados.</p>'}</div>
-          <p class="hint">${assigned.length} tema${assigned.length!==1?'s':''} asignado${assigned.length!==1?'s':''} · ${assigned.reduce((s,d)=>{ const Tema=bd.Temas.find(x=>x.Tema===d); return s+(Tema?Tema.preguntas.length:0); },0)} preguntas en total para esta jornada</p>
           <button class="btn-secondary" data-action="round-temas-edit-auto" data-round="${editRoundTemasRound}" style="height:38px;font-size:.78rem">🎲 Auto-asignar</button>
+        </div>
+
+        <div class="form-block">
+          <label>Preguntas por tema en esta jornada</label>
+          <div class="tabs">${qptChips}</div>
+          <p class="hint">Si un tema tiene menos preguntas cargadas que la cantidad elegida, se usan todas las que tenga.</p>
+          <p class="hint">${assigned.length} tema${assigned.length!==1?'s':''} asignado${assigned.length!==1?'s':''} · ${totalPreguntas} pregunta${totalPreguntas!==1?'s':''} en total para esta jornada</p>
         </div>
       ` : ''}
 
@@ -2242,6 +2269,7 @@ document.getElementById('app').addEventListener('click', e => {
     const t = getTournament(activeTid);
     if (!t) return;
     editRoundTemas = ensureRoundTemas(t);
+    editRoundQuestionsPerTema = ensureRoundQuestionsPerTema(t);
     editRoundTemasRound = t.rounds.length ? 1 : null;
     view = 'round-temas-edit'; render();
 
@@ -2263,6 +2291,13 @@ document.getElementById('app').addEventListener('click', e => {
     );
     render();
 
+  } else if (action === 'round-temas-edit-qpt') {
+    const round = +el.dataset.round;
+    const n = el.dataset.n === 'all' ? null : +el.dataset.n;
+    if (!editRoundQuestionsPerTema) editRoundQuestionsPerTema = {};
+    editRoundQuestionsPerTema[round] = n;
+    render();
+
   } else if (action === 'round-temas-edit-auto') {
     const round = +el.dataset.round;
     const t = getTournament(activeTid);
@@ -2276,12 +2311,13 @@ document.getElementById('app').addEventListener('click', e => {
     const t = getTournament(activeTid);
     if (!t || !editRoundTemas) return;
     t.roundTemas = editRoundTemas;
+    t.roundQuestionsPerTema = editRoundQuestionsPerTema;
     saveTournament(t);
-    editRoundTemas = null; editRoundTemasRound = null;
+    editRoundTemas = null; editRoundTemasRound = null; editRoundQuestionsPerTema = null;
     view = 'detail'; render();
 
   } else if (action === 'round-temas-edit-cancel') {
-    editRoundTemas = null; editRoundTemasRound = null;
+    editRoundTemas = null; editRoundTemasRound = null; editRoundQuestionsPerTema = null;
     view = 'detail'; render();
   }
 });

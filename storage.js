@@ -210,6 +210,7 @@ export function addParticipants(t, newNames) {
   if (t.contentType === 'shared') {
     if (t.buffetData && t.roundTemas) {
       t.roundTemas = ensureRoundTemas(t);
+      t.roundQuestionsPerTema = ensureRoundQuestionsPerTema(t);
     } else {
       t.questionsByRound = ensureQuestionsByRound(t);
     }
@@ -351,14 +352,17 @@ export function sharedQuestionsForRound(t, roundIndex) {
   // exactamente las mismas preguntas.
   if (t.buffetData && t.roundTemas) {
     const asignados = t.roundTemas[roundIndex + 1] || [];
+    const limit = t.roundQuestionsPerTema?.[roundIndex + 1];
     const qs = [];
     asignados.forEach(temaId => {
       const TemaObj = t.buffetData.Temas.find(x => String(x.Tema) === String(temaId));
-      (TemaObj?.preguntas || []).forEach(p => qs.push({
+      let preguntas = (TemaObj?.preguntas || []).map(p => ({
         pregunta: p.pregunta || '',
         respuesta: p.respuesta || '',
         justificacion: p.justificacion || ''
       }));
+      if ([1, 2, 3].includes(limit)) preguntas = preguntas.slice(0, limit);
+      preguntas.forEach(p => qs.push(p));
     });
     return qs;
   }
@@ -430,6 +434,23 @@ export function ensureRoundTemas(t) {
   const result = {};
   t.rounds.forEach((_, i) => {
     result[i + 1] = existing[i + 1] ? [...existing[i + 1]] : [];
+  });
+  return result;
+}
+
+/**
+ * Igual que ensureRoundTemas pero para la cantidad de preguntas por tema que
+ * se toman en cada jornada (t.roundQuestionsPerTema). Cada jornada guarda un
+ * número (1, 2 o 3) o `null`, que significa "todas las preguntas del tema".
+ * Conserva la configuración de las jornadas existentes; las nuevas quedan en
+ * `null` (todas) por defecto.
+ */
+export function ensureRoundQuestionsPerTema(t) {
+  const existing = t.roundQuestionsPerTema || {};
+  const result = {};
+  t.rounds.forEach((_, i) => {
+    const v = existing[i + 1];
+    result[i + 1] = [1, 2, 3].includes(v) ? v : null;
   });
   return result;
 }
