@@ -203,10 +203,16 @@ export function addParticipants(t, newNames) {
     toAdd.forEach(p => { if (!t.participantContent[p]) t.participantContent[p] = []; });
   }
 
-  // 6) Shared: si crecieron las jornadas, completar el contenido de las nuevas
-  //    con el banco plano legado como respaldo (mismo criterio que ensureQuestionsByRound).
+  // 6) Shared: si crecieron las jornadas, completar el contenido de las nuevas.
+  //    Modo "temas por jornada" (JSON tipo buffet, sueltos): las jornadas nuevas
+  //    quedan sin temas asignados (quedarán bloqueadas para evaluar hasta que se
+  //    les asignen). Modo manual legado: se completa con el banco plano legado.
   if (t.contentType === 'shared') {
-    t.questionsByRound = ensureQuestionsByRound(t);
+    if (t.buffetData && t.roundTemas) {
+      t.roundTemas = ensureRoundTemas(t);
+    } else {
+      t.questionsByRound = ensureQuestionsByRound(t);
+    }
   }
 
   return { added: toAdd };
@@ -339,11 +345,59 @@ export function swapOpponentsInRound(t, roundIndex, matchIndexA, sideA, matchInd
  * (comportamiento legado: mismas preguntas en todas las jornadas).
  */
 export function sharedQuestionsForRound(t, roundIndex) {
+  // Modo "temas": JSON con el mismo formato del buffet ({ Temas: [{ Tema, preguntas }] })
+  // pero asignado por JORNADA en vez de por participante (t.roundTemas). Los temas quedan
+  // "sueltos": no se ligan a ningún nombre, todos los participantes de esa jornada usan
+  // exactamente las mismas preguntas.
+  if (t.buffetData && t.roundTemas) {
+    const asignados = t.roundTemas[roundIndex + 1] || [];
+    const qs = [];
+    asignados.forEach(temaId => {
+      const TemaObj = t.buffetData.Temas.find(x => String(x.Tema) === String(temaId));
+      (TemaObj?.preguntas || []).forEach(p => qs.push({
+        pregunta: p.pregunta || '',
+        respuesta: p.respuesta || '',
+        justificacion: p.justificacion || ''
+      }));
+    });
+    return qs;
+  }
+  // Modo manual (legado): consola de preguntas sueltas por jornada.
   if (t.questionsByRound && t.questionsByRound.length) {
     const entry = t.questionsByRound.find(r => r.round === roundIndex + 1);
-    if (entry) return entry.questions || [];
+    if (entry) return (entry.questions || []).map(q => ({
+      pregunta: q.pregunta || q.text || '',
+      respuesta: q.respuesta || '',
+      justificacion: q.justificacion || ''
+    }));
   }
-  return t.questions || [];
+  // Fallback legado: banco plano único para todas las jornadas.
+  return (t.questions || []).map(q => ({
+    pregunta: q.pregunta || q.text || '',
+    respuesta: q.respuesta || '',
+    justificacion: q.justificacion || ''
+  }));
+}
+
+/**
+ * Devuelve los Temas (sueltos, sin ligarse a participantes) asignados a una
+ * jornada específica cuando el torneo usa contenido "mismo para todos" con
+ * JSON de temas (t.buffetData + t.roundTemas).
+ */
+export function sharedTemasForRound(t, roundIndex) {
+  return (t.roundTemas && t.roundTemas[roundIndex + 1]) || [];
+}
+
+/**
+ * Indica si una jornada tiene contenido asignado y por lo tanto se puede
+ * evaluar. Para torneos "buffet" siempre es true (el contenido se garantiza
+ * por participante al crear/agregar). Para torneos "mismo para todos" con
+ * JSON de temas, exige que se hayan elegido temas para esa jornada. Para el
+ * modo manual legado, exige que existan preguntas cargadas.
+ */
+export function roundReadyForEval(t, roundIndex) {
+  if (t.contentType === 'buffet') return true;
+  return sharedQuestionsForRound(t, roundIndex).length > 0;
 }
 
 /**
@@ -361,6 +415,23 @@ export function ensureQuestionsByRound(t) {
       questions: found ? [...found.questions] : [...(t.questions || [])]
     };
   });
+}
+
+/**
+ * Igual que ensureQuestionsByRound pero para el modo "temas por jornada"
+ * (t.roundTemas). Conserva la asignación de las jornadas existentes y deja
+ * vacía la de las jornadas nuevas (no se puede "adivinar" qué temas les
+ * corresponden, ya que están sueltos y no ligados a participantes) — por
+ * eso esas jornadas nuevas quedan bloqueadas para evaluar hasta que alguien
+ * les asigne temas manualmente.
+ */
+export function ensureRoundTemas(t) {
+  const existing = t.roundTemas || {};
+  const result = {};
+  t.rounds.forEach((_, i) => {
+    result[i + 1] = existing[i + 1] ? [...existing[i + 1]] : [];
+  });
+  return result;
 }
 
 // ---------- Buffet helpers ----------

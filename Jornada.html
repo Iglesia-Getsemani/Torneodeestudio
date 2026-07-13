@@ -172,7 +172,7 @@ body {
 <body>
 <div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.04em">Cargando…</p></div>
 <script type="module">
-const { getTournament, saveTournament, esc, swapOpponentsInRound } = await import(`./storage.js?v=${Date.now()}`);
+const { getTournament, saveTournament, esc, swapOpponentsInRound, roundReadyForEval } = await import(`./storage.js?v=${Date.now()}`);
 
 const params = new URLSearchParams(location.search);
 const tid = params.get('tid');
@@ -232,6 +232,7 @@ function render() {
   const resting = t.participants.filter(p => !playing.has(p));
 
   const hideRes = t.hideResults && !resultsRevealed;
+  const canEval = roundReadyForEval(t, roundIndex);
 
   const matchesHtml = round.map((m, mi) => {
     const done = !!m.result;
@@ -293,7 +294,9 @@ function render() {
         ${resultHtml}
         ${swapMode
           ? ''
-          : `<button class="start-eval-btn" data-action="eval" data-match="${mi}">${btnLabel}</button>`}
+          : (canEval
+              ? `<button class="start-eval-btn" data-action="eval" data-match="${mi}">${btnLabel}</button>`
+              : `<button class="start-eval-btn" disabled style="opacity:.4;cursor:not-allowed" title="Asigná temas a esta jornada antes de evaluar">🔒 Faltan temas de esta jornada</button>`)}
       </div>`;
   }).join('');
 
@@ -345,6 +348,7 @@ function render() {
       ${swapMode ? `<p class="swap-hint">Tocá un nombre y después otro (de otro enfrentamiento, o del mismo) para intercambiarlos. Cada uno se lleva sus aciertos y puntaje ya cargados; la victoria se recalcula sola.</p>` : ''}
 
       <section>
+        ${canEval ? '' : `<p class="resting-note" style="color:var(--accent-red)">🔒 Esta jornada todavía no tiene temas/preguntas asignados. Andá a "${esc(t.name)}" en el organizador y asignalos antes de evaluar.</p>`}
         <div class="match-list">${matchesHtml}</div>
         ${restingHtml}
       </section>
@@ -373,6 +377,7 @@ document.getElementById('app').addEventListener('click', e => {
   } else if (action === 'go-round') {
     roundIndex = +el.dataset.idx; pushRound(roundIndex); render();
   } else if (action === 'eval') {
+    if (t && !roundReadyForEval(t, roundIndex)) return;
     const mi = el.dataset.match;
     window.location.href = `Enfrentamiento.html?tid=${encodeURIComponent(tid)}&round=${roundIndex}&match=${mi}`;
   } else if (action === 'gen-image') {

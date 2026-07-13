@@ -366,7 +366,7 @@ body {
 <body>
 <div id="app"></div>
 <script type="module">
-const { loadAll, saveAll, getTournament, saveTournament, deleteTournament: dbDelete, generateRounds, esc, ensureQuestionsByRound, addParticipants } = await import(`./storage.js?v=${Date.now()}`);
+const { loadAll, saveAll, getTournament, saveTournament, deleteTournament: dbDelete, generateRounds, esc, ensureQuestionsByRound, ensureRoundTemas, addParticipants } = await import(`./storage.js?v=${Date.now()}`);
 
 // ── state ──
 let view = 'home';          // home | form | detail | bonus | add-participants
@@ -378,12 +378,16 @@ let inputMode = 'manual';   // manual | json
 let questionInputMode = 'manual';
 
 // ── shared por jornada: consola de fechas (como buffet, pero atada a las jornadas del torneo) ──
-let draftQuestionsByRound = {};  // { [roundNum]: [{ text }] } — usado cuando contentType === 'shared'
+let draftQuestionsByRound = {};  // { [roundNum]: [{ text }] } — usado cuando contentType === 'shared' y sharedContentMode === 'manual'
 let sharedEditingRound = null;   // jornada (1-based) que se está editando en la consola
 
-let contentType = 'shared';        // 'shared' | 'individual' | 'buffet'
-let draftParticipantContent = {};  // { [participante]: [{ text }] } — usado cuando contentType === 'individual'
-let editingParticipant = null;     // participante que se está editando en modo individual
+let contentType = 'shared';        // 'shared' | 'buffet' (sólo dos tipos al crear; 'individual' queda como legado de torneos viejos)
+let sharedContentMode = 'manual';  // 'manual' | 'temas' — sólo aplica cuando contentType === 'shared'
+let draftRoundTemas = {};          // { [roundNum]: [Tema,...] } — usado cuando contentType === 'shared' y sharedContentMode === 'temas'
+let sharedTemasAssigningRound = null; // jornada (1-based) cuyos temas se están editando en modo 'temas'
+
+let draftParticipantContent = {};  // { [participante]: [{ text }] } — legado, sólo se usa al ver/agregar participantes a torneos viejos 'individual'
+let editingParticipant = null;     // participante que se está editando en modo individual (legado)
 let pcInputMode = 'manual';        // manual | bulk
 
 // ── buffet state ──
@@ -640,6 +644,10 @@ function drawWrappedText(ctx, text, cx, y, maxWidth, lineHeight, maxLines) {
 let editSharedData = null;   // copia editable de questionsByRound mientras se edita
 let editSharedRound = null;  // jornada (1-based) seleccionada en la vista de edición
 
+// ── edición de la asignación de TEMAS por jornada (modo 'temas') en un torneo YA CREADO ──
+let editRoundTemas = null;        // copia editable de t.roundTemas mientras se edita
+let editRoundTemasRound = null;   // jornada (1-based) seleccionada en la vista de edición
+
 // ── bonus: puntos extra al final del torneo ──
 let bonusIdx = 0;             // índice del participante actual en la fase bonus
 let bonusScores = {};         // { [nombre]: número } — acumula durante la sesión
@@ -662,6 +670,10 @@ if (openId) { activeTid = openId; view = 'detail'; }
 
 // ── helpers ──
 function sharedContentSummary(t) {
+  if (t.buffetData && t.roundTemas) {
+    const roundsWithTemas = Object.values(t.roundTemas).filter(a => a && a.length).length;
+    return `temas · ${(t.buffetData.Temas||[]).length} temas cargados · ${roundsWithTemas}/${t.rounds.length} jornadas con temas asignados`;
+  }
   if (t.questionsByRound && t.questionsByRound.length) {
     const totalQ = t.questionsByRound.reduce((s, r) => s + (r.questions?.length || 0), 0);
     return `${totalQ} pregunta${totalQ===1?'':'s'} · ${t.questionsByRound.length} jornada${t.questionsByRound.length===1?'':'s'} con contenido propio`;
@@ -682,6 +694,7 @@ function render() {
   else if (view === 'bonus') renderBonus();
   else if (view === 'buffet-edit') renderBuffetEdit();
   else if (view === 'shared-edit') renderSharedEdit();
+  else if (view === 'round-temas-edit') renderRoundTemasEdit();
   else if (view === 'add-participants') renderAddParticipants();
 }
 
@@ -736,84 +749,139 @@ function renderForm() {
 
   const canCreate = draftParticipants.length >= 2 && (
     contentType === 'shared'
-      ? previewRoundsCount > 0 && Array.from({length: previewRoundsCount}, (_,i) => i+1)
-          .every(r => (draftQuestionsByRound[r] || []).length >= 1)
-      : contentType === 'individual'
-        ? draftParticipants.every(p => (draftParticipantContent[p] || []).length >= 1)
-        : contentType === 'buffet'
-          ? !!draftBuffetData && draftParticipants.every(p => (draftParticipantTemas[p] || []).length >= 1)
-          : false
+      ? (sharedContentMode === 'temas'
+          ? previewRoundsCount > 0 && !!draftBuffetData && Array.from({length: previewRoundsCount}, (_,i) => i+1)
+              .every(r => (draftRoundTemas[r] || []).length >= 1)
+          : previewRoundsCount > 0 && Array.from({length: previewRoundsCount}, (_,i) => i+1)
+              .every(r => (draftQuestionsByRound[r] || []).length >= 1))
+      : contentType === 'buffet'
+        ? !!draftBuffetData && draftParticipants.every(p => (draftParticipantTemas[p] || []).length >= 1)
+        : false
   );
 
   let contentBlockHtml;
   if (contentType === 'shared') {
-    // ── Consola de jornadas: cada fecha tiene su propio contenido, igual que buffet pero atado a las jornadas del torneo ──
-    const roundChips = Array.from({length: previewRoundsCount}, (_, i) => i+1).map(r => {
-      const count = (draftQuestionsByRound[r] || []).length;
-      const active = sharedEditingRound === r;
-      return `<button class="p-select-chip ${active?'active':''} ${count===0?'empty':''}" data-action="shared-select-round" data-round="${r}">Jornada ${r} <span class="count">${count}</span></button>`;
-    }).join('');
+    const modeTabsHtml = `
+      <div class="form-block">
+        <label>¿Cómo cargás el contenido?</label>
+        <div class="tabs">
+          <button class="tab ${sharedContentMode==='manual'?'active':''}" data-action="shared-content-mode" data-mode="manual">✏️ Preguntas sueltas por jornada</button>
+          <button class="tab ${sharedContentMode==='temas'?'active':''}" data-action="shared-content-mode" data-mode="temas">🍽️ Cargar JSON de temas</button>
+        </div>
+        <p class="hint">${sharedContentMode==='manual'
+          ? 'Escribís o pegás las preguntas de cada jornada a mano.'
+          : 'Subís un JSON con la misma estructura del buffet (temas con preguntas), y elegís qué temas le tocan a cada jornada. Los temas quedan sueltos, sin ligarse a ningún participante: todos responden lo mismo esa jornada.'}</p>
+      </div>`;
 
-    let roundEditorHtml = '';
-    if (sharedEditingRound && previewRoundsCount > 0) {
-      const items = draftQuestionsByRound[sharedEditingRound] || [];
-      const rqchips = items.map((q, i) => `
-        <span class="chip question-chip">
-          ${esc(q.text.length > 55 ? q.text.slice(0,55)+'…' : q.text)}
-          <button data-action="rm-question" data-round="${sharedEditingRound}" data-index="${i}">×</button>
-        </span>`).join('');
+    if (sharedContentMode === 'temas') {
+      // ── Temas por jornada: mismo JSON que el buffet, pero asignado a jornadas en vez de a participantes ──
+      const bd = draftBuffetData;
+      const availTemas = bd ? bd.Temas.map(d => d.Tema) : [];
+      const TemaChips = availTemas.map(d => `<span class="chip question-chip">Tema ${d} <span style="color:var(--text-muted);font-size:.72rem">(${(bd.Temas.find(x=>x.Tema===d)?.preguntas||[]).length}p)</span></span>`).join('');
 
-      roundEditorHtml = `
-        <div class="pcontent-editor">
-          <span class="pcontent-editor-label">Preguntas de la Jornada ${sharedEditingRound}</span>
-          <div class="tabs">
-            <button class="tab ${questionInputMode==='manual'?'active':''}" data-action="mode-q" data-mode="manual">✏️ Una por una</button>
-            <button class="tab ${questionInputMode==='bulk'?'active':''}" data-action="mode-q" data-mode="bulk">📋 Varias a la vez</button>
+      const roundChips = Array.from({length: previewRoundsCount}, (_, i) => i+1).map(r => {
+        const assigned = draftRoundTemas[r] || [];
+        const active = sharedTemasAssigningRound === r;
+        return `<button class="p-select-chip ${active?'active':''} ${assigned.length===0?'empty':''}" data-action="shared-temas-assign-round" data-round="${r}">Jornada ${r} <span class="count">${assigned.length} tema${assigned.length!==1?'s':''}</span></button>`;
+      }).join('');
+
+      let assignHtml = '';
+      if (sharedTemasAssigningRound && bd) {
+        const assigned = draftRoundTemas[sharedTemasAssigningRound] || [];
+        const TemaToggles = availTemas.map(d => {
+          const on = assigned.some(x => String(x) === String(d));
+          const qCount = (bd.Temas.find(x=>x.Tema===d)?.preguntas||[]).length;
+          return `<button class="p-select-chip ${on?'active':''}" data-action="toggle-round-tema" data-tema="${d}" data-round="${sharedTemasAssigningRound}">Tema ${d} <span class="count">${qCount}p</span></button>`;
+        }).join('');
+        assignHtml = `
+          <div class="pcontent-editor">
+            <span class="pcontent-editor-label">Temas de: Jornada ${sharedTemasAssigningRound}</span>
+            <div class="chip-list">${TemaToggles}</div>
+            <p class="hint">${assigned.length} tema${assigned.length!==1?'s':''} asignado${assigned.length!==1?'s':''} · ${assigned.reduce((s,d)=>{ const Tema=bd.Temas.find(x=>x.Tema===d); return s+(Tema?Tema.preguntas.length:0); },0)} preguntas en total para esta jornada</p>
+            <button class="btn-secondary" data-action="shared-temas-auto-round" data-round="${sharedTemasAssigningRound}" style="height:38px;font-size:.78rem">🎲 Auto-asignar</button>
+          </div>`;
+      }
+
+      contentBlockHtml = `
+        ${modeTabsHtml}
+        <div class="form-block">
+          <label>Contenido de temas (JSON)</label>
+          <div id="buffetUpload" style="display:${draftBuffetData?'none':'flex'};flex-direction:column;gap:8px">
+            <input id="buffetFileInput" type="file" accept=".json" style="color:var(--text-muted);font-size:.88rem">
+            <p class="hint">Sube un archivo JSON con estructura: { "Temas": [{ "Tema": 1, "preguntas": [...] }] }</p>
           </div>
-          <div id="qManual" style="display:${questionInputMode==='manual'?'flex':'none'};gap:8px">
-            <input id="questionInput" type="text" placeholder="Pregunta para la Jornada ${sharedEditingRound}…" style="flex:1">
-            <button class="btn-secondary" data-action="add-question">Agregar</button>
-          </div>
-          <div id="qBulk" class="import-area ${questionInputMode==='bulk'?'visible':''}">
-            <textarea id="qBulkInput" placeholder="Una pregunta por línea:&#10;¿Cuál es la capital de Francia?&#10;¿En qué año fue la Revolución Francesa?"></textarea>
-            <button class="btn-secondary" data-action="import-questions">Importar preguntas</button>
-            <p id="qFeedback" class="import-feedback"></p>
-          </div>
-          <div class="chip-list">${rqchips || '<p class="hint">Sin preguntas aún para esta jornada.</p>'}</div>
+          ${bd ? `
+            <div style="background:var(--bg-panel);border:1px solid var(--accent-gold-dim);border-radius:8px;padding:12px 14px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-size:.88rem;color:var(--accent-gold)">✅ ${bd.Temas.length} temas cargados</span>
+                <button class="btn-secondary" data-action="buffet-clear" style="height:32px;font-size:.72rem;padding:0 10px">Cambiar JSON</button>
+              </div>
+              <div class="chip-list">${TemaChips}</div>
+            </div>
+          ` : ''}
+        </div>
+        ${bd && previewRoundsCount > 0 ? `
+        <div class="form-block">
+          <label>Asignar temas a jornadas</label>
+          ${!previewRoundsCount ? '<p class="hint">Agrega al menos 2 participantes para ver las jornadas del torneo.</p>' : `
+            <div class="chip-list">${roundChips}</div>
+            <p class="hint">Toca una jornada para elegir qué temas le tocan. No se pueden evaluar enfrentamientos de una jornada sin temas asignados.</p>
+            ${assignHtml}
+            <button class="btn-secondary" data-action="shared-temas-auto-all" style="height:42px">🎲 Auto-asignar a todas</button>
+          `}
+        </div>` : (bd ? '<p class="hint">Agrega al menos 2 participantes para ver las jornadas del torneo.</p>' : '')}`;
+
+    } else {
+      // ── Consola de jornadas: cada fecha tiene su propio contenido, igual que buffet pero atado a las jornadas del torneo ──
+      const roundChips = Array.from({length: previewRoundsCount}, (_, i) => i+1).map(r => {
+        const count = (draftQuestionsByRound[r] || []).length;
+        const active = sharedEditingRound === r;
+        return `<button class="p-select-chip ${active?'active':''} ${count===0?'empty':''}" data-action="shared-select-round" data-round="${r}">Jornada ${r} <span class="count">${count}</span></button>`;
+      }).join('');
+
+      let roundEditorHtml = '';
+      if (sharedEditingRound && previewRoundsCount > 0) {
+        const items = draftQuestionsByRound[sharedEditingRound] || [];
+        const rqchips = items.map((q, i) => `
+          <span class="chip question-chip">
+            ${esc(q.text.length > 55 ? q.text.slice(0,55)+'…' : q.text)}
+            <button data-action="rm-question" data-round="${sharedEditingRound}" data-index="${i}">×</button>
+          </span>`).join('');
+
+        roundEditorHtml = `
+          <div class="pcontent-editor">
+            <span class="pcontent-editor-label">Preguntas de la Jornada ${sharedEditingRound}</span>
+            <div class="tabs">
+              <button class="tab ${questionInputMode==='manual'?'active':''}" data-action="mode-q" data-mode="manual">✏️ Una por una</button>
+              <button class="tab ${questionInputMode==='bulk'?'active':''}" data-action="mode-q" data-mode="bulk">📋 Varias a la vez</button>
+            </div>
+            <div id="qManual" style="display:${questionInputMode==='manual'?'flex':'none'};gap:8px">
+              <input id="questionInput" type="text" placeholder="Pregunta para la Jornada ${sharedEditingRound}…" style="flex:1">
+              <button class="btn-secondary" data-action="add-question">Agregar</button>
+            </div>
+            <div id="qBulk" class="import-area ${questionInputMode==='bulk'?'visible':''}">
+              <textarea id="qBulkInput" placeholder="Una pregunta por línea:&#10;¿Cuál es la capital de Francia?&#10;¿En qué año fue la Revolución Francesa?"></textarea>
+              <button class="btn-secondary" data-action="import-questions">Importar preguntas</button>
+              <p id="qFeedback" class="import-feedback"></p>
+            </div>
+            <div class="chip-list">${rqchips || '<p class="hint">Sin preguntas aún para esta jornada.</p>'}</div>
+          </div>`;
+      }
+
+      contentBlockHtml = `
+        ${modeTabsHtml}
+        <!-- Preguntas por jornada (consola de fechas) -->
+        <div class="form-block">
+          <label>Contenido por jornada</label>
+          ${previewRoundsCount === 0
+            ? '<p class="hint">Agrega al menos 2 participantes para ver las jornadas del torneo.</p>'
+            : `
+              <div class="chip-list">${roundChips}</div>
+              <p class="hint">Toca una jornada para definir sus propias preguntas. Cada jornada necesita al menos 1.</p>
+              ${roundEditorHtml}
+            `}
         </div>`;
     }
-
-    contentBlockHtml = `
-      <!-- Preguntas por jornada (consola de fechas) -->
-      <div class="form-block">
-        <label>Contenido por jornada</label>
-        ${previewRoundsCount === 0
-          ? '<p class="hint">Agrega al menos 2 participantes para ver las jornadas del torneo.</p>'
-          : `
-            <div class="chip-list">${roundChips}</div>
-            <p class="hint">Toca una jornada para definir sus propias preguntas. Cada jornada necesita al menos 1.</p>
-            ${roundEditorHtml}
-          `}
-      </div>`;
-  } else if (contentType === 'individual') {
-    contentBlockHtml = `
-      <!-- Contenido individual por participante -->
-      <div class="form-block">
-        <label>Contenido por participante</label>
-        ${draftParticipants.length === 0
-          ? '<p class="hint">Agrega participantes primero para asignarles su contenido.</p>'
-          : `
-            <div class="chip-list">
-              ${draftParticipants.map(p => {
-                const count = (draftParticipantContent[p] || []).length;
-                const active = editingParticipant === p;
-                return `<button class="p-select-chip ${active?'active':''} ${count===0?'empty':''}" data-action="edit-pcontent" data-name="${esc(p)}">${esc(p)} <span class="count">${count}</span></button>`;
-              }).join('')}
-            </div>
-            <p class="hint">Toca un participante para agregar o ver su contenido. Cada uno necesita al menos 1 elemento.</p>
-            ${editingParticipant && draftParticipants.includes(editingParticipant) ? renderParticipantContentEditor(editingParticipant) : ''}
-          `}
-      </div>`;
   } else {
     // ── Buffet mode ──
     const bd = draftBuffetData;
@@ -923,14 +991,11 @@ function renderForm() {
         <label>Tipo de contenido</label>
         <div class="tabs">
           <button class="tab ${contentType==='shared'?'active':''}" data-action="content-type" data-type="shared">🌐 Mismo para todos</button>
-          <button class="tab ${contentType==='individual'?'active':''}" data-action="content-type" data-type="individual">👤 Propio por participante</button>
           <button class="tab ${contentType==='buffet'?'active':''}" data-action="content-type" data-type="buffet">🍽️ Buffet por temas</button>
         </div>
         <p class="hint">${contentType==='shared'
-          ? 'Todos los participantes responden las mismas preguntas, pero podés definir un contenido distinto para cada jornada.'
-          : contentType==='individual'
-            ? 'Cada participante presenta su propio contenido; en el enfrentamiento cada uno se evalúa con su propio material.'
-            : 'Carga un JSON con temas de estudio y asigna temas específicos a cada participante. Pueden compartir temas.'}</p>
+          ? 'Todos los participantes responden las mismas preguntas, pero podés definir un contenido distinto para cada jornada (escrito a mano o cargando un JSON de temas).'
+          : 'Carga un JSON con temas de estudio y asigna temas específicos a cada participante. Pueden compartir temas.'}</p>
       </div>
 
       ${contentBlockHtml}
@@ -1133,7 +1198,11 @@ function renderDetail() {
           <p class="hint">Se aplica desde la próxima jornada que se juegue (las ya evaluadas no cambian).</p>
         </div>
       ` : ''}
-      ${t.contentType === 'shared' ? `
+      ${t.contentType === 'shared' && t.buffetData && t.roundTemas ? `
+        <button class="btn-secondary" data-action="buffet-edit-open" style="align-self:flex-start">✎ Editar preguntas de los temas</button>
+        <button class="btn-secondary" data-action="round-temas-edit-open" style="align-self:flex-start">✎ Asignar temas por jornada</button>
+      ` : ''}
+      ${t.contentType === 'shared' && !(t.buffetData && t.roundTemas) ? `
         <button class="btn-secondary" data-action="shared-edit-open" style="align-self:flex-start">✎ Editar contenido por jornada</button>
       ` : ''}
       <label class="hide-results-toggle" data-action="toggle-hide-results" style="align-self:flex-start">
@@ -1310,6 +1379,59 @@ function renderSharedEdit() {
 
       <button class="btn-primary" data-action="shared-edit-save">Guardar cambios</button>
       <button class="btn-outline" data-action="shared-edit-cancel">Cancelar</button>
+    </div>`;
+}
+
+function renderRoundTemasEdit() {
+  const t = getTournament(activeTid);
+  if (!t) { view='home'; render(); return; }
+  if (!editRoundTemas) editRoundTemas = ensureRoundTemas(t);
+
+  const bd = t.buffetData;
+  const availTemas = bd ? bd.Temas.map(d => d.Tema) : [];
+
+  const roundNums = t.rounds.map((_, i) => i + 1);
+  if (editRoundTemasRound === null || !roundNums.includes(editRoundTemasRound)) {
+    editRoundTemasRound = roundNums[0] ?? null;
+  }
+
+  const roundChips = roundNums.map(r => {
+    const assigned = editRoundTemas[r] || [];
+    return `<button class="p-select-chip ${r===editRoundTemasRound?'active':''} ${assigned.length===0?'empty':''}" data-action="round-temas-edit-round" data-round="${r}">Jornada ${r} <span class="count">${assigned.length} tema${assigned.length!==1?'s':''}</span></button>`;
+  }).join('');
+
+  const assigned = editRoundTemas[editRoundTemasRound] || [];
+  const TemaToggles = availTemas.map(d => {
+    const on = assigned.some(x => String(x) === String(d));
+    const qCount = (bd.Temas.find(x=>x.Tema===d)?.preguntas||[]).length;
+    return `<button class="p-select-chip ${on?'active':''}" data-action="round-temas-edit-toggle" data-tema="${d}" data-round="${editRoundTemasRound}">Tema ${d} <span class="count">${qCount}p</span></button>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <button class="back-link" data-action="round-temas-edit-cancel">← ${esc(t.name)}</button>
+      <header class="page-header">
+        <span class="eyebrow">Asignar temas</span>
+        <h1>Por jornada · ${esc(t.name)}</h1>
+      </header>
+      <p class="hint">Los temas quedan sueltos, sin ligarse a ningún participante: todos responden lo mismo esa jornada. No se puede evaluar un enfrentamiento de una jornada sin temas asignados. Los cambios recién se guardan al tocar "Guardar cambios".</p>
+
+      <div class="form-block">
+        <label>Jornadas</label>
+        <div class="chip-list">${roundChips || '<p class="hint">Este torneo no tiene jornadas.</p>'}</div>
+      </div>
+
+      ${editRoundTemasRound ? `
+        <div class="form-block">
+          <label>Temas de la Jornada ${editRoundTemasRound}</label>
+          <div class="chip-list">${TemaToggles || '<p class="hint">Este torneo no tiene temas cargados.</p>'}</div>
+          <p class="hint">${assigned.length} tema${assigned.length!==1?'s':''} asignado${assigned.length!==1?'s':''} · ${assigned.reduce((s,d)=>{ const Tema=bd.Temas.find(x=>x.Tema===d); return s+(Tema?Tema.preguntas.length:0); },0)} preguntas en total para esta jornada</p>
+          <button class="btn-secondary" data-action="round-temas-edit-auto" data-round="${editRoundTemasRound}" style="height:38px;font-size:.78rem">🎲 Auto-asignar</button>
+        </div>
+      ` : ''}
+
+      <button class="btn-primary" data-action="round-temas-edit-save">Guardar cambios</button>
+      <button class="btn-outline" data-action="round-temas-edit-cancel">Cancelar</button>
     </div>`;
 }
 
@@ -1514,10 +1636,11 @@ document.getElementById('app').addEventListener('click', e => {
 
   if (action === 'new') {
     draftParticipants = []; draftQuestions = []; draftName = ''; inputMode = 'manual'; questionInputMode = 'manual';
-    contentType = 'shared'; draftParticipantContent = {}; editingParticipant = null; pcInputMode = 'manual';
+    contentType = 'shared'; sharedContentMode = 'manual'; draftParticipantContent = {}; editingParticipant = null; pcInputMode = 'manual';
     draftBuffetData = null; draftParticipantTemas = {}; buffetAssigningParticipant = null;
     draftQuestionsPerTema = 3;
     draftQuestionsByRound = {}; sharedEditingRound = null;
+    draftRoundTemas = {}; sharedTemasAssigningRound = null;
     draftHideResults = false;
     view = 'form'; render();
 
@@ -1633,8 +1756,51 @@ document.getElementById('app').addEventListener('click', e => {
   } else if (action === 'content-type') {
     syncDraftName();
     contentType = el.dataset.type;
-    if (contentType === 'individual' && !editingParticipant && draftParticipants.length) {
-      editingParticipant = draftParticipants[0];
+    render();
+
+  } else if (action === 'shared-content-mode') {
+    syncDraftName();
+    sharedContentMode = el.dataset.mode;
+    render();
+
+  } else if (action === 'shared-temas-assign-round') {
+    syncDraftName();
+    sharedTemasAssigningRound = +el.dataset.round;
+    render();
+
+  } else if (action === 'toggle-round-tema') {
+    syncDraftName();
+    const round = +el.dataset.round;
+    const rawTema = el.dataset.tema;
+    const match = (draftBuffetData?.Temas || []).find(d => String(d.Tema) === String(rawTema));
+    const Tema = match ? match.Tema : rawTema;
+    if (!draftRoundTemas[round]) draftRoundTemas[round] = [];
+    const idx = draftRoundTemas[round].findIndex(x => String(x) === String(Tema));
+    if (idx >= 0) draftRoundTemas[round].splice(idx, 1);
+    else draftRoundTemas[round].push(Tema);
+    draftRoundTemas[round].sort((a, b) =>
+      String(a).localeCompare(String(b), 'es', { numeric: true, sensitivity: 'base' })
+    );
+    render();
+
+  } else if (action === 'shared-temas-auto-round') {
+    syncDraftName();
+    const round = +el.dataset.round;
+    if (draftBuffetData) {
+      const allTemas = draftBuffetData.Temas.map(d => d.Tema);
+      draftRoundTemas[round] = [allTemas[Math.floor(Math.random() * allTemas.length)]];
+    }
+    render();
+
+  } else if (action === 'shared-temas-auto-all') {
+    syncDraftName();
+    if (draftBuffetData) {
+      const allTemas = draftBuffetData.Temas.map(d => d.Tema);
+      const previewRounds = draftParticipants.length >= 2 ? generateRounds(draftParticipants) : [];
+      previewRounds.forEach((_, i) => {
+        const r = i + 1;
+        draftRoundTemas[r] = [allTemas[i % allTemas.length]];
+      });
     }
     render();
 
@@ -1728,6 +1894,8 @@ document.getElementById('app').addEventListener('click', e => {
     draftBuffetData = null;
     draftParticipantTemas = {};
     buffetAssigningParticipant = null;
+    draftRoundTemas = {};
+    sharedTemasAssigningRound = null;
     render();
 
   } else if (action === 'add-participants-open') {
@@ -1842,8 +2010,9 @@ document.getElementById('app').addEventListener('click', e => {
     const name = nameEl?.value.trim() || draftName;
     if (!name || draftParticipants.length < 2) return;
     const rounds = generateRounds(draftParticipants);
-    if (contentType === 'shared' && !rounds.every((_, i) => (draftQuestionsByRound[i+1]||[]).length >= 1)) return;
-    if (contentType === 'individual' && !draftParticipants.every(p => (draftParticipantContent[p]||[]).length >= 1)) return;
+    const sharedTemasMode = contentType === 'shared' && sharedContentMode === 'temas';
+    if (contentType === 'shared' && !sharedTemasMode && !rounds.every((_, i) => (draftQuestionsByRound[i+1]||[]).length >= 1)) return;
+    if (sharedTemasMode && (!draftBuffetData || !rounds.every((_, i) => (draftRoundTemas[i+1]||[]).length >= 1))) return;
     if (contentType === 'buffet' && (!draftBuffetData || !draftParticipants.every(p => (draftParticipantTemas[p]||[]).length >= 1))) return;
     const tournament = {
       id: 'trn_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
@@ -1851,13 +2020,14 @@ document.getElementById('app').addEventListener('click', e => {
       participants: [...draftParticipants],
       contentType,
       questions: [],
-      questionsByRound: contentType === 'shared'
+      questionsByRound: (contentType === 'shared' && !sharedTemasMode)
         ? rounds.map((_, i) => ({ round: i+1, questions: [...(draftQuestionsByRound[i+1]||[])] }))
         : [],
-      participantContent: contentType === 'individual'
-        ? Object.fromEntries(draftParticipants.map(p => [p, [...(draftParticipantContent[p]||[])]]))
-        : {},
-      buffetData: contentType === 'buffet' ? draftBuffetData : null,
+      participantContent: {},
+      buffetData: (contentType === 'buffet' || sharedTemasMode) ? draftBuffetData : null,
+      roundTemas: sharedTemasMode
+        ? Object.fromEntries(rounds.map((_, i) => [i+1, [...(draftRoundTemas[i+1]||[])]]))
+        : null,
       participantTemas: contentType === 'buffet'
         ? Object.fromEntries(draftParticipants.map(p => [p, [...(draftParticipantTemas[p]||[])]]))
         : {},
@@ -2067,6 +2237,52 @@ document.getElementById('app').addEventListener('click', e => {
   } else if (action === 'shared-edit-cancel') {
     editSharedData = null; editSharedRound = null;
     view = 'detail'; render();
+
+  } else if (action === 'round-temas-edit-open') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    editRoundTemas = ensureRoundTemas(t);
+    editRoundTemasRound = t.rounds.length ? 1 : null;
+    view = 'round-temas-edit'; render();
+
+  } else if (action === 'round-temas-edit-round') {
+    editRoundTemasRound = +el.dataset.round; render();
+
+  } else if (action === 'round-temas-edit-toggle') {
+    const round = +el.dataset.round;
+    const t = getTournament(activeTid);
+    const rawTema = el.dataset.tema;
+    const match = (t?.buffetData?.Temas || []).find(d => String(d.Tema) === String(rawTema));
+    const Tema = match ? match.Tema : rawTema;
+    if (!editRoundTemas[round]) editRoundTemas[round] = [];
+    const idx = editRoundTemas[round].findIndex(x => String(x) === String(Tema));
+    if (idx >= 0) editRoundTemas[round].splice(idx, 1);
+    else editRoundTemas[round].push(Tema);
+    editRoundTemas[round].sort((a, b) =>
+      String(a).localeCompare(String(b), 'es', { numeric: true, sensitivity: 'base' })
+    );
+    render();
+
+  } else if (action === 'round-temas-edit-auto') {
+    const round = +el.dataset.round;
+    const t = getTournament(activeTid);
+    if (t?.buffetData) {
+      const allTemas = t.buffetData.Temas.map(d => d.Tema);
+      editRoundTemas[round] = [allTemas[Math.floor(Math.random() * allTemas.length)]];
+    }
+    render();
+
+  } else if (action === 'round-temas-edit-save') {
+    const t = getTournament(activeTid);
+    if (!t || !editRoundTemas) return;
+    t.roundTemas = editRoundTemas;
+    saveTournament(t);
+    editRoundTemas = null; editRoundTemasRound = null;
+    view = 'detail'; render();
+
+  } else if (action === 'round-temas-edit-cancel') {
+    editRoundTemas = null; editRoundTemasRound = null;
+    view = 'detail'; render();
   }
 });
 
@@ -2133,12 +2349,23 @@ document.getElementById('app').addEventListener('change', e => {
           return;
         }
         draftBuffetData = data;
-        // auto-asignar el primer tema a cada participante si no tiene ninguno
-        draftParticipants.forEach(p => {
-          if (!draftParticipantTemas[p] || draftParticipantTemas[p].length === 0) {
-            draftParticipantTemas[p] = [data.Temas[0].Tema];
-          }
-        });
+        if (contentType === 'shared') {
+          // auto-asignar el primer tema a cada jornada si no tiene ninguno
+          const previewRounds = draftParticipants.length >= 2 ? generateRounds(draftParticipants) : [];
+          previewRounds.forEach((_, i) => {
+            const r = i + 1;
+            if (!draftRoundTemas[r] || draftRoundTemas[r].length === 0) {
+              draftRoundTemas[r] = [data.Temas[0].Tema];
+            }
+          });
+        } else {
+          // auto-asignar el primer tema a cada participante si no tiene ninguno
+          draftParticipants.forEach(p => {
+            if (!draftParticipantTemas[p] || draftParticipantTemas[p].length === 0) {
+              draftParticipantTemas[p] = [data.Temas[0].Tema];
+            }
+          });
+        }
         render();
       } catch (err) {
         alert('Error al parsear el JSON: ' + err.message);

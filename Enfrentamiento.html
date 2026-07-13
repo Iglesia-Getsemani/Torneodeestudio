@@ -369,7 +369,7 @@ body {
 <div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase">Cargando…</p></div>
 
 <script type="module">
-const { getTournament, saveTournament, esc, buffetTemasForParticipant, sharedQuestionsForRound } = await import(`./storage.js?v=${Date.now()}`);
+const { getTournament, saveTournament, esc, buffetTemasForParticipant, sharedQuestionsForRound, roundReadyForEval } = await import(`./storage.js?v=${Date.now()}`);
 
 // ── URL params ──
 const params    = new URLSearchParams(location.search);
@@ -572,6 +572,14 @@ function render() {
   if (!t) { document.getElementById('app').innerHTML = `<p class="error-state">Torneo no encontrado.</p>`; return; }
   const m = t.rounds[roundIdx]?.[matchIdx];
   if (!m) { document.getElementById('app').innerHTML = `<p class="error-state">Enfrentamiento no encontrado.</p>`; return; }
+  if (!m.result && !m.progress && !roundReadyForEval(t, roundIdx)) {
+    document.getElementById('app').innerHTML = `
+      <div class="page">
+        <p class="error-state">🔒 Esta jornada todavía no tiene temas/preguntas asignados.</p>
+        <a class="back-link" href="${backUrl}">← Volver a la jornada</a>
+      </div>`;
+    return;
+  }
   if (phase === 'finish') { renderFinish(t, m); return; }
   if (phase === 'extra') { renderExtra(t, m); return; }
   if (phase === 'mode-select') { renderModeSelect(t, m); return; }
