@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Enfrentamiento</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -366,7 +369,7 @@ body {
 <div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase">Cargando…</p></div>
 
 <script type="module">
-import { getTournament, saveTournament, esc, buffetTemasForParticipant, sharedQuestionsForRound } from './storage.js';
+const { getTournament, saveTournament, esc, buffetTemasForParticipant, sharedQuestionsForRound } = await import(`./storage.js?v=${Date.now()}`);
 
 // ── URL params ──
 const params    = new URLSearchParams(location.search);

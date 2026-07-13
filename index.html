@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Organizador de Torneos</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -363,7 +366,7 @@ body {
 <body>
 <div id="app"></div>
 <script type="module">
-import { loadAll, saveAll, getTournament, saveTournament, deleteTournament as dbDelete, generateRounds, esc, ensureQuestionsByRound, addParticipants } from './storage.js';
+const { loadAll, saveAll, getTournament, saveTournament, deleteTournament: dbDelete, generateRounds, esc, ensureQuestionsByRound, addParticipants } = await import(`./storage.js?v=${Date.now()}`);
 
 // ── state ──
 let view = 'home';          // home | form | detail | bonus | add-participants
