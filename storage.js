@@ -94,6 +94,239 @@ export function generateRounds(participants) {
   return rounds;
 }
 
+// ---------- Agregar participantes a un torneo ya creado ----------
+
+// Invierte un `result` guardado cuando el par (A,B) aparece ahora como (B,A).
+function flipResult(r) {
+  if (!r) return null;
+  const flipped = { ...r };
+  if ('homeScore' in flipped || 'awayScore' in flipped) {
+    [flipped.homeScore, flipped.awayScore] = [flipped.awayScore, flipped.homeScore];
+  }
+  if ('extraHome' in flipped || 'extraAway' in flipped) {
+    [flipped.extraHome, flipped.extraAway] = [flipped.extraAway, flipped.extraHome];
+  }
+  if (flipped.absent && typeof flipped.absent === 'object') {
+    flipped.absent = { home: !!flipped.absent.away, away: !!flipped.absent.home };
+  } else if (flipped.absentSide === 'home') flipped.absentSide = 'away';
+  else if (flipped.absentSide === 'away') flipped.absentSide = 'home';
+  if (Array.isArray(flipped.questionScores)) {
+    flipped.questionScores = flipped.questionScores.map(s => ({
+      ...s, homeQ: s.awayQ, awayQ: s.homeQ, homeC: s.awayC, awayC: s.homeC
+    }));
+  }
+  return flipped;
+}
+
+// Invierte un `progress` (evaluación a medias) guardado, igual criterio que flipResult.
+function flipProgress(p) {
+  if (!p) return null;
+  const flipped = { ...p };
+  if (flipped.extraScores) {
+    flipped.extraScores = { home: flipped.extraScores.away, away: flipped.extraScores.home };
+  }
+  if (Array.isArray(flipped.turnData)) {
+    flipped.turnData = flipped.turnData.map(td => ({ ...td, home: td.away, away: td.home }));
+  }
+  return flipped;
+}
+
+/**
+ * Agrega participantes a un torneo ya creado y regenera el calendario
+ * round-robin completo entre TODOS los participantes (los que ya estaban +
+ * los nuevos). Esto hace que la cantidad de jornadas y enfrentamientos
+ * aumente naturalmente en proporción a la gente agregada.
+ *
+ * Los enfrentamientos que ya se habían jugado (o quedaron a medias) entre dos
+ * participantes que ya estaban en el torneo se vuelven a aplicar sobre el
+ * nuevo calendario buscando el mismo par sin importar quién quedó de local o
+ * visitante, así no se pierde nada de lo ya evaluado.
+ *
+ * Muta `t` directamente (participants, rounds, y — según el tipo de
+ * contenido — participantTemas / participantContent / questionsByRound).
+ * No guarda; hay que llamar a `saveTournament(t)` después.
+ *
+ * Devuelve { added: string[] } con los nombres realmente incorporados
+ * (ignora duplicados ya existentes y strings vacíos).
+ */
+export function addParticipants(t, newNames) {
+  const cleaned = (newNames || []).map(n => String(n).trim()).filter(Boolean);
+  const toAdd = [];
+  cleaned.forEach(n => {
+    if (!t.participants.includes(n) && !toAdd.includes(n)) toAdd.push(n);
+  });
+  if (!toAdd.length) return { added: [] };
+
+  // 1) Guardar todo lo ya jugado / en curso, indexado por par (sin importar orden).
+  const pairKey = (a, b) => [a, b].sort().join('␟');
+  const savedByPair = new Map();
+  (t.rounds || []).forEach(round => {
+    (round || []).forEach(m => {
+      if (m.result || m.progress) {
+        savedByPair.set(pairKey(m.home, m.away), {
+          home: m.home, result: m.result || null, progress: m.progress || null
+        });
+      }
+    });
+  });
+
+  // 2) Nueva lista de participantes + nuevo calendario completo.
+  t.participants = [...t.participants, ...toAdd];
+  const newRounds = generateRounds(t.participants);
+
+  // 3) Reaplicar lo guardado donde el par coincida en el nuevo calendario.
+  newRounds.forEach(round => {
+    round.forEach(m => {
+      const saved = savedByPair.get(pairKey(m.home, m.away));
+      if (!saved) return;
+      const swapped = saved.home !== m.home;
+      m.result = swapped ? flipResult(saved.result) : saved.result;
+      m.progress = swapped ? flipProgress(saved.progress) : saved.progress;
+    });
+  });
+  t.rounds = newRounds;
+
+  // 4) Buffet: asegurar que cada nuevo participante tenga al menos un tema (por defecto, el primero).
+  if (t.contentType === 'buffet') {
+    if (!t.participantTemas) t.participantTemas = {};
+    const firstTema = t.buffetData?.Temas?.[0]?.Tema;
+    toAdd.forEach(p => {
+      if (!t.participantTemas[p] || !t.participantTemas[p].length) {
+        t.participantTemas[p] = firstTema !== undefined ? [firstTema] : [];
+      }
+    });
+  }
+
+  // 5) Contenido individual: dejar el arreglo listo (vacío) para cargarlo después.
+  if (t.contentType === 'individual') {
+    if (!t.participantContent) t.participantContent = {};
+    toAdd.forEach(p => { if (!t.participantContent[p]) t.participantContent[p] = []; });
+  }
+
+  // 6) Shared: si crecieron las jornadas, completar el contenido de las nuevas
+  //    con el banco plano legado como respaldo (mismo criterio que ensureQuestionsByRound).
+  if (t.contentType === 'shared') {
+    t.questionsByRound = ensureQuestionsByRound(t);
+  }
+
+  return { added: toAdd };
+}
+
+// ---------- Reasignar rivales dentro de una misma jornada ----------
+
+const SIDE_SCORE = { home: 'homeScore', away: 'awayScore' };
+const SIDE_EXTRA = { home: 'extraHome', away: 'extraAway' };
+const SIDE_Q     = { home: 'homeQ',     away: 'awayQ' };
+const SIDE_C     = { home: 'homeC',     away: 'awayC' };
+
+// Lee si un lado está marcado como ausente en un `result`, soportando el
+// formato nuevo (`absent: {home, away}`) y el viejo (`absentSide`: string).
+function readAbsentFlag(r, side) {
+  if (!r) return false;
+  if (r.absent && typeof r.absent === 'object') return !!r.absent[side];
+  return r.absentSide === side;
+}
+
+// Extrae únicamente los datos que le pertenecen a UN lado (home o away) de un
+// enfrentamiento: su puntaje, sus aciertos, y su progreso a medias si lo hay.
+function extractSideData(m, side) {
+  const r = m.result, p = m.progress;
+  return {
+    result: r ? {
+      score: r[SIDE_SCORE[side]] || 0,
+      extra: r[SIDE_EXTRA[side]] || 0,
+      absent: readAbsentFlag(r, side),
+      answers: (r.questionScores || []).map(qs => ({
+        q: qs[SIDE_Q[side]] ?? null,
+        c: qs[SIDE_C[side]] ?? null
+      }))
+    } : null,
+    progress: p ? {
+      extra: p.extraScores ? (p.extraScores[side] || 0) : 0,
+      turns: (p.turnData || []).map(td => td[side] || null)
+    } : null
+  };
+}
+
+// Inyecta los datos extraídos con extractSideData() en el lado indicado de
+// otro enfrentamiento (o del mismo), sin tocar el lado contrario.
+function applySideData(m, side, data) {
+  if (data.result) {
+    if (!m.result) {
+      m.result = { homeScore: 0, awayScore: 0, extraHome: 0, extraAway: 0, absent: { home: false, away: false }, questionScores: [] };
+    }
+    if (!m.result.absent || typeof m.result.absent !== 'object') {
+      m.result.absent = { home: m.result.absentSide === 'home', away: m.result.absentSide === 'away' };
+      delete m.result.absentSide;
+    }
+    m.result[SIDE_SCORE[side]] = data.result.score || 0;
+    m.result[SIDE_EXTRA[side]] = data.result.extra || 0;
+    m.result.absent[side] = !!data.result.absent;
+    if (!m.result.questionScores) m.result.questionScores = [];
+    data.result.answers.forEach((ans, i) => {
+      if (!m.result.questionScores[i]) m.result.questionScores[i] = {};
+      m.result.questionScores[i][SIDE_Q[side]] = ans.q;
+      m.result.questionScores[i][SIDE_C[side]] = ans.c;
+    });
+  } else if (m.result) {
+    m.result[SIDE_SCORE[side]] = 0;
+    m.result[SIDE_EXTRA[side]] = 0;
+    if (!m.result.absent || typeof m.result.absent !== 'object') {
+      m.result.absent = { home: m.result.absentSide === 'home', away: m.result.absentSide === 'away' };
+      delete m.result.absentSide;
+    }
+    m.result.absent[side] = false;
+    (m.result.questionScores || []).forEach(qs => { qs[SIDE_Q[side]] = null; qs[SIDE_C[side]] = null; });
+  }
+
+  if (data.progress) {
+    if (!m.progress) m.progress = { turnData: [], extraScores: { home: 0, away: 0 } };
+    if (!m.progress.extraScores) m.progress.extraScores = { home: 0, away: 0 };
+    m.progress.extraScores[side] = data.progress.extra || 0;
+    if (!m.progress.turnData) m.progress.turnData = [];
+    data.progress.turns.forEach((turn, i) => {
+      if (!m.progress.turnData[i]) m.progress.turnData[i] = {};
+      m.progress.turnData[i][side] = turn;
+    });
+  } else if (m.progress) {
+    if (m.progress.extraScores) m.progress.extraScores[side] = 0;
+    (m.progress.turnData || []).forEach(td => { td[side] = null; });
+  }
+}
+
+/**
+ * Cambia de rival a un participante DENTRO de la misma jornada, intercambiando
+ * su lugar con otro participante que también juega esa jornada (en otro
+ * enfrentamiento, o en el lado contrario del mismo). Cada uno se lleva
+ * consigo sus propios aciertos y puntaje ya cargados —si los tenía—; lo único
+ * que cambia es contra quién quedó enfrentado. La victoria de cada
+ * enfrentamiento se recalcula sola a partir de los puntajes ya guardados,
+ * ahora comparados entre quienes terminan cara a cara.
+ *
+ * sideA/sideB: 'home' | 'away'.
+ * Devuelve true si el cambio se pudo aplicar.
+ */
+export function swapOpponentsInRound(t, roundIndex, matchIndexA, sideA, matchIndexB, sideB) {
+  const round = t.rounds?.[roundIndex];
+  if (!round) return false;
+  const mA = round[matchIndexA], mB = round[matchIndexB];
+  if (!mA || !mB) return false;
+
+  const nameA = mA[sideA], nameB = mB[sideB];
+  if (!nameA || !nameB || nameA === nameB) return false;
+
+  const dataA = extractSideData(mA, sideA);
+  const dataB = extractSideData(mB, sideB);
+
+  mA[sideA] = nameB;
+  mB[sideB] = nameA;
+
+  applySideData(mA, sideA, dataB);
+  applySideData(mB, sideB, dataA);
+
+  return true;
+}
+
 // ---------- Shared ("mismo para todos") por jornada ----------
 
 /**
@@ -174,21 +407,24 @@ function askedQuestionTexts(t, participantName) {
 }
 
 /**
- * Devuelve los temas asignados al participante agrupados con 3 preguntas aleatorias cada uno.
+ * Devuelve los temas asignados al participante agrupados con N preguntas aleatorias cada uno,
+ * donde N es `t.questionsPerTema` (1, 2 o 3 — por defecto 3 si el torneo no lo define).
  * Formato: [{ Tema: number|string, questions: [{ pregunta, respuesta, justificacion }] }]
  *
- * Ejemplo: si tiene asignados temas 1, 2, 3 → devuelve 3 grupos,
- * cada uno con hasta 3 preguntas aleatorias de ese tema.
+ * Ejemplo: si tiene asignados temas 1, 2, 3 y questionsPerTema = 2 → devuelve 3 grupos,
+ * cada uno con hasta 2 preguntas aleatorias de ese tema.
  *
  * Prioriza preguntas que el participante todavía no respondió en jornadas
  * anteriores del torneo: primero arma el grupo al azar entre las preguntas
- * "nuevas" de ese tema, y solo si no alcanzan para completar 3, rellena con
- * preguntas ya usadas (también elegidas al azar) para no dejar el tema corto.
+ * "nuevas" de ese tema, y solo si no alcanzan para completar la cantidad
+ * pedida, rellena con preguntas ya usadas (también elegidas al azar) para
+ * no dejar el tema corto.
  */
 export function buffetTemasForParticipant(t, participantName) {
   const Temas = (t.participantTemas && t.participantTemas[participantName]) || [];
   const bd = t.buffetData;
   if (!bd || !bd.Temas) return [];
+  const perTema = [1, 2, 3].includes(t.questionsPerTema) ? t.questionsPerTema : 3;
   const asked = askedQuestionTexts(t, participantName);
   const result = [];
   Temas.forEach(d => {
@@ -202,9 +438,9 @@ export function buffetTemasForParticipant(t, participantName) {
     const nuevas = allQ.filter(q => !asked.has(q.pregunta));
     const yaUsadas = allQ.filter(q => asked.has(q.pregunta));
 
-    let picked = shuffle(nuevas).slice(0, 3);
-    if (picked.length < 3) {
-      picked = picked.concat(shuffle(yaUsadas).slice(0, 3 - picked.length));
+    let picked = shuffle(nuevas).slice(0, perTema);
+    if (picked.length < perTema) {
+      picked = picked.concat(shuffle(yaUsadas).slice(0, perTema - picked.length));
     }
     result.push({ Tema: d, questions: shuffle(picked) });
   });
@@ -213,7 +449,7 @@ export function buffetTemasForParticipant(t, participantName) {
 
 /**
  * Compatibilidad: devuelve [{ text }] plano aplanando los temas.
- * 3 temas × 3 preguntas = 9 items.
+ * N temas × questionsPerTema preguntas = total de items.
  */
 export function buffetItemsForParticipant(t, participantName) {
   const grouped = buffetTemasForParticipant(t, participantName);

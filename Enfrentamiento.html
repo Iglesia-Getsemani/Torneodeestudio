@@ -343,6 +343,14 @@ body {
   font-family: 'Oswald', sans-serif; font-size: .65rem; letter-spacing: .08em; text-transform: uppercase;
   color: var(--accent-red); padding: 2px 8px; border-radius: 999px; background: rgba(199,84,80,.15);
 }
+.btn-absent-toggle {
+  align-self: center; width: auto; padding: 8px 14px;
+  border: 1px solid rgba(199,84,80,.35); border-radius: 8px;
+  background: none; color: var(--accent-red);
+  font-family: 'Oswald', sans-serif; font-size: .78rem; letter-spacing: .02em; text-transform: uppercase;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.btn-absent-toggle:hover { background: rgba(199,84,80,.12); border-color: var(--accent-red); }
 
 /* ── resultados ocultos (suspenso) ── */
 .hidden-results-panel {
@@ -377,8 +385,19 @@ let phase = 'eval'; // 'mode-select' | 'eval' | 'extra' | 'finish'
 let evalMode = null; // 'alternating' | 'sequential' — modo de este enfrentamiento
 let resultsRevealed = false; // revelado temporal (por sesión) cuando el torneo oculta resultados
 
-// ── inasistencia: participante que no se presentó a jugar ──
-let absentSide = null; // null | 'home' | 'away'
+// ── inasistencia: participante(s) que no se presentaron a jugar (o abandonaron a mitad) ──
+let absent = { home: false, away: false }; // cada lado se marca de forma independiente
+let showAbsentPanel = false; // controla si se muestra el panel para marcar ausencia durante el enfrentamiento
+
+// Interpreta el campo guardado de ausencia, soportando el formato viejo
+// (`absentSide`: string único) y el nuevo (`absent`: { home, away } independientes).
+function readAbsent(source) {
+  if (!source) return { home: false, away: false };
+  if (source.absent && typeof source.absent === 'object') {
+    return { home: !!source.absent.home, away: !!source.absent.away };
+  }
+  return { home: source.absentSide === 'home', away: source.absentSide === 'away' };
+}
 
 let buffetHome = [];
 let buffetAway  = [];
@@ -451,6 +470,7 @@ function init() {
 
   const total = totalUnits(t, m);
   resultsRevealed = false;
+  showAbsentPanel = false;
   stopCountdown();
 
   if (m.result?.questionScores) {
@@ -465,7 +485,7 @@ function init() {
     extraScores = { home: m.result?.extraHome ?? 0, away: m.result?.extraAway ?? 0 };
     extraSide = 'home';
     evalMode = m.evalMode || 'alternating';
-    absentSide = m.result?.absentSide || null;
+    absent = readAbsent(m.result);
     currentQ = 0; currentSide = 'home'; turnPhase = 'question';
     phase = 'finish';
 
@@ -485,7 +505,7 @@ function init() {
     turnPhase = p.turnPhase || 'question';
     extraScores = p.extraScores ? { ...p.extraScores } : { home: 0, away: 0 };
     extraSide = p.extraSide === 'away' ? 'away' : 'home';
-    absentSide = p.absentSide || null;
+    absent = readAbsent(p);
     phase = p.phase || (evalMode ? 'eval' : 'mode-select');
 
   } else {
@@ -494,7 +514,7 @@ function init() {
     evalMode = m.evalMode || null;
     currentQ = 0; currentSide = 'home'; turnPhase = 'question';
     extraScores = { home: 0, away: 0 }; extraSide = 'home';
-    absentSide = null;
+    absent = { home: false, away: false };
     phase = evalMode ? 'eval' : 'mode-select';
   }
 
@@ -516,7 +536,7 @@ function persistProgress() {
     phase,
     extraScores: { ...extraScores },
     extraSide,
-    absentSide,
+    absent: { ...absent },
     turnData: turnData.map(td => ({
       home: { question: td.home.question, correct: td.home.correct },
       away: { question: td.away.question, correct: td.away.correct }
@@ -554,6 +574,39 @@ function render() {
   if (phase === 'mode-select') { renderModeSelect(t, m); return; }
   if (phase === 'sequential-select') { renderSequentialSelect(t, m); return; }
   renderEval(t, m);
+}
+
+// Panel reutilizable para marcar la ausencia de un participante EN CUALQUIER MOMENTO
+// del enfrentamiento (no solo antes de empezar). Se muestra como un botón discreto que,
+// al tocarlo, despliega la confirmación por participante.
+function renderAbsentPanel(m) {
+  if (absent.home && absent.away) return ''; // ya están los dos marcados, no queda nadie por marcar
+  const pending = [];
+  if (!absent.home) pending.push({ side: 'home', name: m.home });
+  if (!absent.away) pending.push({ side: 'away', name: m.away });
+
+  if (!showAbsentPanel) {
+    const label = pending.length === 2
+      ? '🚫 Marcar ausencia de un participante'
+      : '🚫 Marcar ausencia del otro participante';
+    return `<button class="btn-absent-toggle" data-action="toggle-absent-panel">${label}</button>`;
+  }
+
+  const buttons = pending.map(p =>
+    `<button class="btn-absent" data-action="mark-absent" data-side="${p.side}">🚫 ${esc(p.name)} no asistió</button>`
+  ).join('');
+
+  const hint = pending.length === 2
+    ? 'Los puntos que ya ganó hasta ahora se mantienen; el resto de sus preguntas queda en 0. El otro participante sigue jugando normalmente.'
+    : `Los puntos que ya ganó hasta ahora se mantienen; el resto de sus preguntas queda en 0. Como ya no quedaría nadie jugando, el enfrentamiento se da por finalizado.`;
+
+  return `
+    <div class="absent-block">
+      <span class="absent-label">¿Quién no asistió o dejó de participar?</span>
+      <div class="absent-btn-row">${buttons}</div>
+      <span class="absent-hint">${hint}</span>
+      <button class="btn-absent-toggle" data-action="toggle-absent-panel">Cancelar</button>
+    </div>`;
 }
 
 function renderModeSelect(t, m) {
@@ -778,18 +831,20 @@ function renderEval(t, m) {
 
       <div class="scoreboard">
         <div class="player-col">
-          <div class="player-name">${esc(m.home)}${absentSide === 'home' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</div>
+          <div class="player-name">${esc(m.home)}${absent.home ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</div>
           <div class="player-score" id="scoreHome">${hideRes ? '🔒' : totals.home}</div>
         </div>
         <div class="score-divider">—</div>
         <div class="player-col">
-          <div class="player-name">${esc(m.away)}${absentSide === 'away' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</div>
+          <div class="player-name">${esc(m.away)}${absent.away ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</div>
           <div class="player-score" id="scoreAway">${hideRes ? '🔒' : totals.away}</div>
         </div>
       </div>
       ${t.hideResults ? `<button class="btn-outline" data-action="toggle-reveal">${resultsRevealed ? '🙈 Ocultar de nuevo' : '👁 Revelar resultados'}</button>` : ''}
 
       ${mainHtml}
+
+      ${renderAbsentPanel(m)}
 
       <button class="btn-restart" data-action="restart-match">↺ Reiniciar enfrentamiento (elegir modo de nuevo)</button>
     </div>`;
@@ -873,6 +928,8 @@ function renderExtra(t, m) {
 
         <button class="extra-skip" data-action="extra-skip">Saltar esta ronda extra</button>
 
+        ${renderAbsentPanel(m)}
+
         <button class="btn-restart" data-action="restart-match">↺ Reiniciar enfrentamiento (elegir modo de nuevo)</button>
       </div>`;
     return;
@@ -918,6 +975,8 @@ function renderExtra(t, m) {
 
       <button class="extra-skip" data-action="extra-skip">Saltar ronda extra</button>
 
+      ${renderAbsentPanel(m)}
+
       <button class="btn-restart" data-action="restart-match">↺ Reiniciar enfrentamiento (elegir modo de nuevo)</button>
     </div>`;
 }
@@ -951,8 +1010,8 @@ function renderFinish(t, m) {
   const summaryRows = turnData.map((td, i) => {
     const hOk = td.home.correct === true;
     const aOk = td.away.correct === true;
-    const hText = absentSide === 'home' ? 'Ausente' : (td.home.question?.pregunta || '—');
-    const aText = absentSide === 'away' ? 'Ausente' : (td.away.question?.pregunta || '—');
+    const hText = (absent.home && !td.home.question) ? 'Ausente' : (td.home.question?.pregunta || '—');
+    const aText = (absent.away && !td.away.question) ? 'Ausente' : (td.away.question?.pregunta || '—');
     return `<tr>
       <td style="color:var(--text-muted)">${i+1}</td>
       <td style="font-size:.82rem">${esc(hText)}</td>
@@ -977,13 +1036,13 @@ function renderFinish(t, m) {
         <div class="finish-subtitle">${esc(m.home)} vs ${esc(m.away)}</div>
         <div class="final-scores">
           <div class="final-player ${isHome?'winner':''}">
-            <span class="fname">${esc(m.home)}${absentSide === 'home' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</span>
+            <span class="fname">${esc(m.home)}${absent.home ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</span>
             <span class="fscore">${totals.home}</span>
             ${isHome?'<span class="winner-label">🏆 Ganador</span>':''}
           </div>
           <div class="final-sep">—</div>
           <div class="final-player ${isAway?'winner':''}">
-            <span class="fname">${esc(m.away)}${absentSide === 'away' ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</span>
+            <span class="fname">${esc(m.away)}${absent.away ? ' <span class="absent-tag">🚫 Ausente</span>' : ''}</span>
             <span class="fscore">${totals.away}</span>
             ${isAway?'<span class="winner-label">🏆 Ganador</span>':''}
           </div>
@@ -1018,7 +1077,7 @@ function renderFinish(t, m) {
       </div>
 
       <button class="btn-primary" data-action="save">Guardar cambios</button>
-      <button class="btn-outline" data-action="re-eval">← Re-evaluar desde cero</button>
+      ${(absent.home && absent.away) ? '' : '<button class="btn-outline" data-action="re-eval">← Re-evaluar desde cero</button>'}
     </div>`;
 }
 
@@ -1050,7 +1109,8 @@ document.getElementById('app').addEventListener('click', e => {
 
   } else if (action === 'back-to-mode') {
     evalMode = null;
-    absentSide = null;
+    absent = { home: false, away: false };
+    showAbsentPanel = false;
     phase = 'mode-select';
     render();
 
@@ -1060,24 +1120,66 @@ document.getElementById('app').addEventListener('click', e => {
     const m2 = t2?.rounds[roundIdx]?.[matchIdx];
     if (!t2 || !m2) return;
     const absentName = side === 'home' ? m2.home : m2.away;
-    if (!confirm(`¿Confirmás que ${absentName} no asistió? Va a quedar con 0 puntos y su participación en esta jornada se da por finalizada.`)) return;
-
     const total2 = totalUnits(t2, m2);
     const presentSide = side === 'home' ? 'away' : 'home';
-    turnData = Array.from({ length: total2 }, () => {
-      const td = emptyTurn();
-      td[side] = { question: null, correct: false }; // ausente: 0 puntos en todas sus preguntas
-      return td;
-    });
-    absentSide = side;
-    evalMode = 'sequential'; // solo el presente tiene que responder, uno por uno
-    extraScores = { home: 0, away: 0 };
-    extraSide = presentSide;
-    currentSide = presentSide;
-    currentQ = 0;
-    turnPhase = 'question';
-    phase = 'eval';
+    const otherAlreadyAbsent = absent[presentSide];
+
+    // ¿Ya había respondido alguna pregunta antes de marcarse como ausente?
+    const alreadyPlayed = evalMode !== null && turnData.some(td => td[side]?.correct !== null);
+    let confirmMsg;
+    if (otherAlreadyAbsent) {
+      const otherName = presentSide === 'home' ? m2.home : m2.away;
+      confirmMsg = `¿Confirmás que ${absentName} tampoco asistió? Como ${otherName} ya estaba marcado como ausente, no quedaría nadie jugando y el enfrentamiento se da por finalizado.`;
+    } else if (alreadyPlayed) {
+      confirmMsg = `¿Confirmás que ${absentName} no continúa / no asistió más? Los puntos que ya ganó hasta ahora se mantienen, pero el resto de sus preguntas queda en 0. Su participación en esta jornada se da por finalizada.`;
+    } else {
+      confirmMsg = `¿Confirmás que ${absentName} no asistió? Va a quedar con 0 puntos y su participación en esta jornada se da por finalizada.`;
+    }
+    if (!confirm(confirmMsg)) return;
+
+    // Solo se pisan las preguntas de ese lado que TODAVÍA no fueron evaluadas
+    // (correct === null); lo que ya respondió antes de ausentarse queda intacto.
+    if (!Array.isArray(turnData) || turnData.length < total2) {
+      const prev = Array.isArray(turnData) ? turnData : [];
+      turnData = Array.from({ length: total2 }, (_, i) => prev[i] || emptyTurn());
+    }
+    for (let i = 0; i < total2; i++) {
+      if (!turnData[i]) turnData[i] = emptyTurn();
+      if (turnData[i][side].correct === null) {
+        turnData[i][side] = { question: null, correct: false };
+      }
+    }
+
+    absent[side] = true;
+    showAbsentPanel = false;
+    extraScores = { ...extraScores, [side]: 0 };
+
+    if (absent.home && absent.away) {
+      // No queda nadie jugando: el enfrentamiento termina acá mismo,
+      // conservando lo que cada uno ya había respondido hasta ausentarse.
+      evalMode = evalMode || 'sequential';
+      phase = 'finish';
+    } else {
+      evalMode = 'sequential'; // de ahora en más, solo el presente tiene que responder, uno por uno
+      extraSide = presentSide;
+
+      // Retomar al presente justo donde se quedó (si ya había respondido todo, pasa a su ronda extra)
+      const firstUnanswered = turnData.findIndex(td => td[presentSide].correct === null);
+      if (firstUnanswered === -1) {
+        phase = 'extra';
+      } else {
+        currentQ = firstUnanswered;
+        currentSide = presentSide;
+        turnPhase = 'question';
+        phase = 'eval';
+      }
+    }
+
     persistProgress();
+    render();
+
+  } else if (action === 'toggle-absent-panel') {
+    showAbsentPanel = !showAbsentPanel;
     render();
 
   } else if (action === 'toggle-reveal') {
@@ -1146,10 +1248,13 @@ document.getElementById('app').addEventListener('click', e => {
   } else if (action === 're-eval') {
     stopCountdown();
     currentQ = 0; turnPhase = 'question';
-    if (absentSide) {
+    if (absent.home && absent.away) {
+      // No queda nadie jugando: no tiene sentido re-evaluar nada.
+      phase = 'finish';
+    } else if (absent.home || absent.away) {
       // Uno de los dos no asistió: no tiene sentido volver a preguntar
       // quién empieza, se va directo a las preguntas del presente.
-      const presentSide = absentSide === 'home' ? 'away' : 'home';
+      const presentSide = absent.home ? 'away' : 'home';
       currentSide = presentSide; extraSide = presentSide;
       phase = 'eval';
     } else {
@@ -1171,7 +1276,8 @@ document.getElementById('app').addEventListener('click', e => {
     evalMode = null;
     currentQ = 0; currentSide = 'home'; turnPhase = 'question';
     extraScores = { home: 0, away: 0 }; extraSide = 'home';
-    absentSide = null;
+    absent = { home: false, away: false };
+    showAbsentPanel = false;
     phase = 'mode-select';
     if (t2 && m2) {
       delete m2.progress;
@@ -1277,7 +1383,7 @@ document.getElementById('app').addEventListener('click', e => {
       extraHome: extraScores.home || 0,
       extraAway: extraScores.away || 0,
       questionScores: cleanScores,
-      absentSide: absentSide || null,
+      absent: { ...absent },
       savedAt: Date.now()
     };
     if (evalMode) m.evalMode = evalMode;

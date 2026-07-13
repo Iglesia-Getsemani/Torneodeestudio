@@ -363,10 +363,10 @@ body {
 <body>
 <div id="app"></div>
 <script type="module">
-import { loadAll, saveAll, getTournament, saveTournament, deleteTournament as dbDelete, generateRounds, esc, ensureQuestionsByRound } from './storage.js';
+import { loadAll, saveAll, getTournament, saveTournament, deleteTournament as dbDelete, generateRounds, esc, ensureQuestionsByRound, addParticipants } from './storage.js';
 
 // ── state ──
-let view = 'home';          // home | form | detail | bonus
+let view = 'home';          // home | form | detail | bonus | add-participants
 let activeTid = null;
 let draftName = '';
 let draftParticipants = [];
@@ -387,10 +387,19 @@ let pcInputMode = 'manual';        // manual | bulk
 let draftBuffetData = null;             // JSON parseado { Temas: [...] }
 let draftParticipantTemas = {};          // { [participante]: [TemaNum, ...] }
 let buffetAssigningParticipant = null;  // participante cuyos temas se están editando
+let draftQuestionsPerTema = 3;          // 1 | 2 | 3 — cuántas preguntas por tema salen en cada jornada
 
 // ── edición de contenido buffet en un torneo YA CREADO ──
 let editBuffetData = null;   // copia editable de t.buffetData mientras se edita
 let editBuffetTema = null;    // tema seleccionado (number o texto) en la vista de edición
+
+// ── agregar participantes a un torneo YA CREADO ──
+let addNames = [];                 // nombres nuevos a agregar (aún no guardados)
+let addNameInputMode = 'manual';   // manual | bulk
+let addParticipantTemas = {};      // { [name]: [Tema,...] } — sólo si el torneo es buffet
+let addBuffetAssigning = null;     // nuevo participante cuyos temas se están editando
+let addParticipantContent = {};    // { [name]: [{text}] } — sólo si el torneo es individual
+let addEditingParticipant = null;  // nuevo participante cuyo contenido se está editando
 
 // ── utilidades: pegar varias preguntas de una vez en formato { pregunta, respuesta, justificacion } ──
 function parseQuestionsPaste(raw) {
@@ -670,6 +679,7 @@ function render() {
   else if (view === 'bonus') renderBonus();
   else if (view === 'buffet-edit') renderBuffetEdit();
   else if (view === 'shared-edit') renderSharedEdit();
+  else if (view === 'add-participants') renderAddParticipants();
 }
 
 function renderHome() {
@@ -833,6 +843,15 @@ function renderForm() {
     }
 
     contentBlockHtml = `
+      <!-- Buffet: cuántas preguntas por tema en cada jornada -->
+      <div class="form-block">
+        <label>Preguntas por tema y jornada</label>
+        <div class="tabs">
+          ${[1,2,3].map(n => `<button class="tab ${draftQuestionsPerTema===n?'active':''}" data-action="set-questions-per-tema" data-n="${n}">${n} pregunta${n>1?'s':''}</button>`).join('')}
+        </div>
+        <p class="hint">En cada jornada, a cada participante le van a salir ${draftQuestionsPerTema} pregunta${draftQuestionsPerTema>1?'s':''} de cada tema que tenga asignado.</p>
+      </div>
+
       <!-- Buffet: carga JSON y asigna temas -->
       <div class="form-block">
         <label>Contenido buffet (JSON)</label>
@@ -1100,8 +1119,16 @@ function renderDetail() {
         <h1>${esc(t.name)}</h1>
       </header>
 
+      <button class="btn-secondary" data-action="add-participants-open" style="align-self:flex-start">➕ Agregar participantes</button>
       ${t.contentType === 'buffet' ? `
         <button class="btn-secondary" data-action="buffet-edit-open" style="align-self:flex-start">✎ Editar contenido buffet</button>
+        <div class="form-block">
+          <label>Preguntas por tema y jornada</label>
+          <div class="tabs">
+            ${[1,2,3].map(n => `<button class="tab ${(t.questionsPerTema||3)===n?'active':''}" data-action="set-tournament-questions-per-tema" data-n="${n}">${n} pregunta${n>1?'s':''}</button>`).join('')}
+          </div>
+          <p class="hint">Se aplica desde la próxima jornada que se juegue (las ya evaluadas no cambian).</p>
+        </div>
       ` : ''}
       ${t.contentType === 'shared' ? `
         <button class="btn-secondary" data-action="shared-edit-open" style="align-self:flex-start">✎ Editar contenido por jornada</button>
@@ -1283,6 +1310,146 @@ function renderSharedEdit() {
     </div>`;
 }
 
+function renderAddParticipants() {
+  const t = getTournament(activeTid);
+  if (!t) { view = 'home'; render(); return; }
+
+  const chips = addNames.map((p, i) => `
+    <span class="chip">
+      ${esc(p)}
+      <button data-action="addp-rm-name" data-index="${i}">×</button>
+    </span>`).join('');
+
+  const projectedParticipants = [...t.participants, ...addNames];
+  const projectedRounds = addNames.length ? generateRounds(projectedParticipants) : t.rounds;
+  const roundsDelta = projectedRounds.length - t.rounds.length;
+
+  let contentBlockHtml;
+  if (t.contentType === 'buffet') {
+    const bd = t.buffetData;
+    const availTemas = bd ? bd.Temas.map(d => d.Tema) : [];
+    const participantChips = addNames.map(p => {
+      const assigned = addParticipantTemas[p] || [];
+      const active = addBuffetAssigning === p;
+      return `<button class="p-select-chip ${active?'active':''} ${assigned.length===0?'empty':''}" data-action="addp-buffet-assign" data-name="${esc(p)}">${esc(p)} <span class="count">${assigned.length} tema${assigned.length!==1?'s':''}</span></button>`;
+    }).join('');
+
+    let assignHtml = '';
+    if (addBuffetAssigning && addNames.includes(addBuffetAssigning) && bd) {
+      const assigned = addParticipantTemas[addBuffetAssigning] || [];
+      const toggles = availTemas.map(d => {
+        const on = assigned.some(x => String(x) === String(d));
+        const qCount = (bd.Temas.find(x=>x.Tema===d)?.preguntas||[]).length;
+        return `<button class="p-select-chip ${on?'active':''}" data-action="addp-toggle-tema" data-tema="${d}" data-name="${esc(addBuffetAssigning)}">Tema ${d} <span class="count">${qCount}p</span></button>`;
+      }).join('');
+      assignHtml = `
+        <div class="pcontent-editor">
+          <span class="pcontent-editor-label">Temas de: ${esc(addBuffetAssigning)}</span>
+          <div class="chip-list">${toggles}</div>
+        </div>`;
+    }
+
+    contentBlockHtml = `
+      <div class="form-block">
+        <label>Asignar temas a los nuevos participantes</label>
+        ${addNames.length === 0
+          ? '<p class="hint">Agregá participantes arriba para asignarles temas.</p>'
+          : `
+            <div class="chip-list">${participantChips}</div>
+            <p class="hint">Toca un participante para asignarle temas. Pueden compartir temas.</p>
+            ${assignHtml}
+            <button class="btn-secondary" data-action="addp-buffet-auto-all" style="height:42px">🎲 Auto-asignar a todos</button>
+          `}
+      </div>`;
+  } else if (t.contentType === 'individual') {
+    contentBlockHtml = `
+      <div class="form-block">
+        <label>Contenido de los nuevos participantes</label>
+        ${addNames.length === 0
+          ? '<p class="hint">Agregá participantes arriba para cargarles su contenido.</p>'
+          : `
+            <div class="chip-list">
+              ${addNames.map(p => {
+                const count = (addParticipantContent[p] || []).length;
+                const active = addEditingParticipant === p;
+                return `<button class="p-select-chip ${active?'active':''} ${count===0?'empty':''}" data-action="addp-edit-content" data-name="${esc(p)}">${esc(p)} <span class="count">${count}</span></button>`;
+              }).join('')}
+            </div>
+            <p class="hint">Cada participante nuevo necesita al menos 1 elemento de contenido.</p>
+            ${addEditingParticipant && addNames.includes(addEditingParticipant) ? renderAddContentEditor(addEditingParticipant) : ''}
+          `}
+      </div>`;
+  } else {
+    contentBlockHtml = `
+      <div class="form-block">
+        <label>Contenido</label>
+        <p class="hint">Este torneo usa contenido "mismo para todos". Las jornadas nuevas van a reutilizar el banco de preguntas ya cargado; si querés, después podés definir preguntas propias para cada jornada desde "✎ Editar contenido por jornada".</p>
+      </div>`;
+  }
+
+  const canConfirm = addNames.length > 0 && (
+    t.contentType === 'buffet' ? addNames.every(p => (addParticipantTemas[p]||[]).length >= 1) :
+    t.contentType === 'individual' ? addNames.every(p => (addParticipantContent[p]||[]).length >= 1) :
+    true
+  );
+
+  document.getElementById('app').innerHTML = `
+    <div class="page">
+      <button class="back-link" data-action="addp-cancel">← ${esc(t.name)}</button>
+      <header class="page-header">
+        <span class="eyebrow">${esc(t.name)}</span>
+        <h1>Agregar participantes</h1>
+      </header>
+      <p class="hint">Al confirmar se regenera el calendario entre todos los participantes (los que ya estaban + los nuevos). Los enfrentamientos ya jugados entre quienes ya estaban conservan su resultado; las jornadas y enfrentamientos aumentan en proporción a la cantidad de gente que agregues.</p>
+
+      <div class="form-block">
+        <label>Nuevos participantes</label>
+        <div class="tabs">
+          <button class="tab ${addNameInputMode==='manual'?'active':''}" data-action="addp-mode" data-mode="manual">✏️ Uno por uno</button>
+          <button class="tab ${addNameInputMode==='bulk'?'active':''}" data-action="addp-mode" data-mode="bulk">📋 Importar lista</button>
+        </div>
+        <div style="display:${addNameInputMode==='manual'?'flex':'none'};gap:8px">
+          <input id="addParticipantInput" type="text" placeholder="Nombre del participante" style="flex:1">
+          <button class="btn-secondary" data-action="addp-add-name">Agregar</button>
+        </div>
+        <div class="import-area ${addNameInputMode==='bulk'?'visible':''}">
+          <textarea id="addParticipantBulk" placeholder='["Ana","Pedro"] o una línea por nombre'></textarea>
+          <button class="btn-secondary" data-action="addp-import-names">Importar</button>
+          <p id="addpFeedback" class="import-feedback"></p>
+        </div>
+        <div class="chip-list">${chips || '<p class="hint">Sin participantes nuevos aún.</p>'}</div>
+        ${addNames.length ? `<p class="hint">El torneo pasará de ${t.participants.length} a ${projectedParticipants.length} participantes, y de ${t.rounds.length} a ${projectedRounds.length} jornada${projectedRounds.length===1?'':'s'}${roundsDelta ? ` (+${roundsDelta})` : ''}.</p>` : ''}
+      </div>
+
+      <hr class="divider">
+
+      ${contentBlockHtml}
+
+      <button class="btn-primary" data-action="addp-confirm" ${canConfirm?'':'disabled'}>Agregar y regenerar jornadas</button>
+      <button class="btn-outline" data-action="addp-cancel">Cancelar</button>
+    </div>`;
+
+  if (addNameInputMode === 'manual') document.getElementById('addParticipantInput')?.focus();
+}
+
+function renderAddContentEditor(name) {
+  const items = addParticipantContent[name] || [];
+  const ichips = items.map((q, i) => `
+    <span class="chip question-chip">
+      ${esc(q.text.length > 55 ? q.text.slice(0,55)+'…' : q.text)}
+      <button data-action="addp-rm-content" data-name="${esc(name)}" data-index="${i}">×</button>
+    </span>`).join('');
+  return `
+    <div class="pcontent-editor">
+      <span class="pcontent-editor-label">Editando contenido de: ${esc(name)}</span>
+      <div style="display:flex;gap:8px">
+        <input id="addpContentInput" type="text" placeholder="Contenido o pregunta para ${esc(name)}…" style="flex:1">
+        <button class="btn-secondary" data-action="addp-add-content" data-name="${esc(name)}">Agregar</button>
+      </div>
+      <div class="chip-list">${ichips || '<p class="hint">Sin contenido aún.</p>'}</div>
+    </div>`;
+}
+
 function renderBonus() {
   const t = getTournament(activeTid);
   if (!t) { view='home'; render(); return; }
@@ -1346,6 +1513,7 @@ document.getElementById('app').addEventListener('click', e => {
     draftParticipants = []; draftQuestions = []; draftName = ''; inputMode = 'manual'; questionInputMode = 'manual';
     contentType = 'shared'; draftParticipantContent = {}; editingParticipant = null; pcInputMode = 'manual';
     draftBuffetData = null; draftParticipantTemas = {}; buffetAssigningParticipant = null;
+    draftQuestionsPerTema = 3;
     draftQuestionsByRound = {}; sharedEditingRound = null;
     draftHideResults = false;
     view = 'form'; render();
@@ -1467,6 +1635,10 @@ document.getElementById('app').addEventListener('click', e => {
     }
     render();
 
+  } else if (action === 'set-questions-per-tema') {
+    draftQuestionsPerTema = +el.dataset.n;
+    render();
+
   } else if (action === 'edit-pcontent') {
     syncDraftName();
     editingParticipant = el.dataset.name;
@@ -1555,6 +1727,107 @@ document.getElementById('app').addEventListener('click', e => {
     buffetAssigningParticipant = null;
     render();
 
+  } else if (action === 'add-participants-open') {
+    addNames = []; addNameInputMode = 'manual';
+    addParticipantTemas = {}; addBuffetAssigning = null;
+    addParticipantContent = {}; addEditingParticipant = null;
+    view = 'add-participants'; render();
+
+  } else if (action === 'addp-cancel') {
+    addNames = []; addParticipantTemas = {}; addParticipantContent = {};
+    view = 'detail'; render();
+
+  } else if (action === 'addp-mode') {
+    addNameInputMode = el.dataset.mode; render();
+
+  } else if (action === 'addp-add-name') {
+    const t = getTournament(activeTid);
+    const inp = document.getElementById('addParticipantInput');
+    const val = inp?.value.trim();
+    if (val && t && !t.participants.includes(val) && !addNames.includes(val)) addNames.push(val);
+    if (inp) inp.value = '';
+    render(); document.getElementById('addParticipantInput')?.focus();
+
+  } else if (action === 'addp-rm-name') {
+    const removed = addNames[+el.dataset.index];
+    addNames.splice(+el.dataset.index, 1);
+    if (removed) { delete addParticipantTemas[removed]; delete addParticipantContent[removed]; }
+    if (addBuffetAssigning === removed) addBuffetAssigning = null;
+    if (addEditingParticipant === removed) addEditingParticipant = addNames[0] || null;
+    render();
+
+  } else if (action === 'addp-import-names') {
+    const t = getTournament(activeTid);
+    const raw = document.getElementById('addParticipantBulk')?.value.trim() || '';
+    const fb = document.getElementById('addpFeedback');
+    let names;
+    try { const parsed = JSON.parse(raw); names = Array.isArray(parsed) ? parsed.map(String) : null; }
+    catch { names = raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean); }
+    if (!names || !names.length) { fb.textContent='No se encontraron nombres.'; fb.className='import-feedback err'; return; }
+    let added = 0;
+    names.forEach(n => { if (n && t && !t.participants.includes(n) && !addNames.includes(n)) { addNames.push(n); added++; } });
+    fb.textContent = `${added} importado${added===1?'':'s'}.`; fb.className = 'import-feedback ok';
+    render();
+
+  } else if (action === 'addp-buffet-assign') {
+    addBuffetAssigning = el.dataset.name; render();
+
+  } else if (action === 'addp-toggle-tema') {
+    const t = getTournament(activeTid);
+    const name = el.dataset.name;
+    const rawTema = el.dataset.tema;
+    const match = (t?.buffetData?.Temas || []).find(d => String(d.Tema) === String(rawTema));
+    const Tema = match ? match.Tema : rawTema;
+    if (!addParticipantTemas[name]) addParticipantTemas[name] = [];
+    const idx = addParticipantTemas[name].findIndex(x => String(x) === String(Tema));
+    if (idx >= 0) addParticipantTemas[name].splice(idx, 1);
+    else addParticipantTemas[name].push(Tema);
+    render();
+
+  } else if (action === 'addp-buffet-auto-all') {
+    const t = getTournament(activeTid);
+    const allTemas = (t?.buffetData?.Temas || []).map(d => d.Tema);
+    if (allTemas.length) addNames.forEach((p, i) => { addParticipantTemas[p] = [allTemas[i % allTemas.length]]; });
+    render();
+
+  } else if (action === 'addp-edit-content') {
+    addEditingParticipant = el.dataset.name;
+    render();
+    document.getElementById('addpContentInput')?.focus();
+
+  } else if (action === 'addp-add-content') {
+    const name = el.dataset.name;
+    const inp = document.getElementById('addpContentInput');
+    const val = inp?.value.trim();
+    if (val) {
+      if (!addParticipantContent[name]) addParticipantContent[name] = [];
+      addParticipantContent[name].push({ text: val });
+    }
+    if (inp) inp.value = '';
+    render(); document.getElementById('addpContentInput')?.focus();
+
+  } else if (action === 'addp-rm-content') {
+    const name = el.dataset.name;
+    (addParticipantContent[name] || []).splice(+el.dataset.index, 1);
+    render();
+
+  } else if (action === 'addp-confirm') {
+    const t = getTournament(activeTid);
+    if (!t || !addNames.length) return;
+    if (t.contentType === 'buffet' && !addNames.every(p => (addParticipantTemas[p]||[]).length >= 1)) return;
+    if (t.contentType === 'individual' && !addNames.every(p => (addParticipantContent[p]||[]).length >= 1)) return;
+
+    addParticipants(t, addNames);
+    // Pisar los valores por defecto con lo que el usuario eligió a mano en este formulario.
+    addNames.forEach(p => {
+      if (t.contentType === 'buffet' && addParticipantTemas[p]) t.participantTemas[p] = [...addParticipantTemas[p]];
+      if (t.contentType === 'individual' && addParticipantContent[p]) t.participantContent[p] = [...addParticipantContent[p]];
+    });
+    saveTournament(t);
+
+    addNames = []; addParticipantTemas = {}; addParticipantContent = {}; addBuffetAssigning = null; addEditingParticipant = null;
+    view = 'detail'; render();
+
   } else if (action === 'toggle-hide-results-draft') {
     syncDraftName();
     draftHideResults = !draftHideResults;
@@ -1585,6 +1858,7 @@ document.getElementById('app').addEventListener('click', e => {
       participantTemas: contentType === 'buffet'
         ? Object.fromEntries(draftParticipants.map(p => [p, [...(draftParticipantTemas[p]||[])]]))
         : {},
+      questionsPerTema: contentType === 'buffet' ? draftQuestionsPerTema : 3,
       rounds,
       hideResults: draftHideResults,
       createdAt: Date.now()
@@ -1598,6 +1872,13 @@ document.getElementById('app').addEventListener('click', e => {
     t.hideResults = !t.hideResults;
     saveTournament(t);
     if (!t.hideResults) standingsRevealed = false;
+    render();
+
+  } else if (action === 'set-tournament-questions-per-tema') {
+    const t = getTournament(activeTid);
+    if (!t) return;
+    t.questionsPerTema = +el.dataset.n;
+    saveTournament(t);
     render();
 
   } else if (action === 'toggle-standings-reveal') {

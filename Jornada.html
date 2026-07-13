@@ -97,6 +97,13 @@ body {
 .start-eval-btn:hover { filter: brightness(1.08); }
 
 .resting-note { font-size: .85rem; color: var(--text-muted); text-align: center; }
+.swap-name {
+  background: none; border: 1px solid transparent; color: inherit;
+  font: inherit; cursor: pointer; padding: 2px 8px; border-radius: 6px;
+}
+.swap-name:hover { border-color: var(--accent-gold-dim); }
+.swap-name.selected { background: var(--accent-gold-dim); color: var(--accent-gold); border-color: var(--accent-gold); }
+.swap-hint { font-size: .82rem; color: var(--text-muted); text-align: center; margin: -8px 0 0; }
 .divider { border: none; border-top: 1px solid var(--accent-gold-dim); margin: 0; }
 
 /* all rounds sidebar list */
@@ -162,13 +169,17 @@ body {
 <body>
 <div id="app"><p style="text-align:center;color:var(--text-muted);padding:60px 0;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.04em">Cargando…</p></div>
 <script type="module">
-import { getTournament, saveTournament, esc } from './storage.js';
+import { getTournament, saveTournament, esc, swapOpponentsInRound } from './storage.js';
 
 const params = new URLSearchParams(location.search);
 const tid = params.get('tid');
 let roundIndex = parseInt(params.get('round') ?? '0', 10);
 let resultsRevealed = false; // revelado temporal (por sesión) cuando el torneo oculta resultados
 let ioMessage = null; // feedback transitorio de exportar/importar jornada { type: 'ok'|'error', text }
+
+// ── cambiar rivales dentro de la jornada actual ──
+let swapMode = false;       // si está activo, tocar dos nombres los intercambia
+let swapSelection = null;   // { mi, side } — primera selección hecha en el modo cambio de rival
 
 function pushRound(idx) {
   const url = new URL(location.href);
@@ -233,8 +244,11 @@ function render() {
         if (homeScore > awayScore) winnerHtml = `<span class="winner-tag">🏆 ${esc(m.home)}</span>`;
         else if (awayScore > homeScore) winnerHtml = `<span class="winner-tag">🏆 ${esc(m.away)}</span>`;
         else winnerHtml = `<span class="draw-tag">Empate</span>`;
-        const absentName = m.result.absentSide === 'home' ? m.home : (m.result.absentSide === 'away' ? m.away : null);
-        const absentHtml = absentName ? `<span class="absent-tag">🚫 ${esc(absentName)} no asistió</span>` : '';
+        const absentInfo = m.result.absent && typeof m.result.absent === 'object'
+          ? m.result.absent
+          : { home: m.result.absentSide === 'home', away: m.result.absentSide === 'away' };
+        const absentNames = [absentInfo.home ? m.home : null, absentInfo.away ? m.away : null].filter(Boolean);
+        const absentHtml = absentNames.map(n => `<span class="absent-tag">🚫 ${esc(n)} no asistió</span>`).join(' ');
         resultHtml = `
           <div class="match-result-row">
             <span class="score-home">${homeScore}</span>
@@ -261,15 +275,22 @@ function render() {
 
     const btnLabel = done ? '✎ Revisar / Editar' : (inProgress ? '▶ Continuar evaluación' : '▶ Evaluar enfrentamiento');
 
+    const isSel = side => !!swapSelection && swapSelection.mi === mi && swapSelection.side === side;
+    const nameHtml = side => swapMode
+      ? `<button class="match-name swap-name ${isSel(side)?'selected':''}" data-action="swap-pick" data-match="${mi}" data-side="${side}">${esc(m[side])}</button>`
+      : `<span class="match-name">${esc(m[side])}</span>`;
+
     return `
       <div class="match-card ${done ? 'done' : (inProgress ? 'in-progress' : '')}">
-        <div class="match-card-top">
-          <span class="match-name">${esc(m.home)}</span>
+        <div class="match-card-top" style="${swapMode ? 'cursor:default' : ''}">
+          ${nameHtml('home')}
           <span class="vs-badge">vs</span>
-          <span class="match-name">${esc(m.away)}</span>
+          ${nameHtml('away')}
         </div>
         ${resultHtml}
-        <button class="start-eval-btn" data-action="eval" data-match="${mi}">${btnLabel}</button>
+        ${swapMode
+          ? ''
+          : `<button class="start-eval-btn" data-action="eval" data-match="${mi}">${btnLabel}</button>`}
       </div>`;
   }).join('');
 
@@ -315,6 +336,11 @@ function render() {
       <input type="file" id="import-round-input" accept="application/json,.json" style="display:none">
       ${ioMessage ? `<p class="io-feedback ${ioMessage.type}">${esc(ioMessage.text)}</p>` : ''}
 
+      <button class="gen-image-btn" data-action="toggle-swap-mode" style="${swapMode ? 'border-color:var(--accent-gold);background:var(--accent-gold-dim)' : ''}">
+        ${swapMode ? '✕ Salir del modo cambio de rival' : '🔀 Cambiar rivales de esta jornada'}
+      </button>
+      ${swapMode ? `<p class="swap-hint">Tocá un nombre y después otro (de otro enfrentamiento, o del mismo) para intercambiarlos. Cada uno se lleva sus aciertos y puntaje ya cargados; la victoria se recalcula sola.</p>` : ''}
+
       <section>
         <div class="match-list">${matchesHtml}</div>
         ${restingHtml}
@@ -355,6 +381,34 @@ document.getElementById('app').addEventListener('click', e => {
     if (t) exportRound(t, roundIndex);
   } else if (action === 'import-round') {
     document.getElementById('import-round-input').click();
+  } else if (action === 'toggle-swap-mode') {
+    swapMode = !swapMode;
+    swapSelection = null;
+    render();
+  } else if (action === 'swap-pick') {
+    if (!t) return;
+    const mi = +el.dataset.match;
+    const side = el.dataset.side;
+    if (!swapSelection) {
+      swapSelection = { mi, side };
+      render();
+      return;
+    }
+    if (swapSelection.mi === mi && swapSelection.side === side) {
+      swapSelection = null; // deseleccionar tocando el mismo nombre de nuevo
+      render();
+      return;
+    }
+    const round = t.rounds[roundIndex];
+    const nameA = round[swapSelection.mi]?.[swapSelection.side];
+    const nameB = round[mi]?.[side];
+    const ok = swapOpponentsInRound(t, roundIndex, swapSelection.mi, swapSelection.side, mi, side);
+    if (ok) {
+      saveTournament(t);
+      ioMessage = { type: 'ok', text: `${nameA} y ${nameB} intercambiaron rival. Cada uno conservó sus aciertos y puntaje.` };
+    }
+    swapSelection = null;
+    render();
   }
 });
 
@@ -441,7 +495,9 @@ function importRound(file) {
         if ('homeScore' in flipped || 'awayScore' in flipped) {
           [flipped.homeScore, flipped.awayScore] = [flipped.awayScore, flipped.homeScore];
         }
-        if (flipped.absentSide === 'home') flipped.absentSide = 'away';
+        if (flipped.absent && typeof flipped.absent === 'object') {
+          flipped.absent = { home: !!flipped.absent.away, away: !!flipped.absent.home };
+        } else if (flipped.absentSide === 'home') flipped.absentSide = 'away';
         else if (flipped.absentSide === 'away') flipped.absentSide = 'home';
         if (Array.isArray(flipped.questionScores)) {
           flipped.questionScores = flipped.questionScores.map(s => ({ ...s, homeQ: s.awayQ, awayQ: s.homeQ }));
